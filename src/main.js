@@ -36,9 +36,10 @@ const MAX_COIL_LEN = 14
 const KNOB_REST_Y = BOARD_HEIGHT - 24
 const MAX_PULL_PX = 20
 const MIN_PULL_RATIO_TO_FIRE = 0.15
-// 발사 후 이 시간(ms) 안에 어느 칸에도 착지하지 못하면(공이 어딘가 끼는 등)
-// 강제로 정리하고 다시 발사할 수 있게 풀어준다.
-const STUCK_BALL_TIMEOUT_MS = 4500
+// 발사 시간과 무관하게, 실제 속도가 이 값 아래인 상태가 2초 이어질 때만
+// 공이 끼었거나 멈춘 것으로 보고 회차를 정리한다.
+const STUCK_SPEED_THRESHOLD = 0.08
+const STUCK_SETTLE_TIME_MS = 2000
 
 const NEON = Object.freeze({
   ballCore: '#e0f7ff',
@@ -121,8 +122,8 @@ function setBoardRefreshEnabled(enabled) {
 
 function refreshBoard() {
   if (ballInPlay) return
-  clearTimeout(stuckBallTimer)
   activeBall = null
+  stationarySince = null
   prizes = createDemoPrizes()
   slotSequence = createRandomSlotSequence()
   slotLayout = buildSlotLayout(prizes, slotSequence)
@@ -181,7 +182,7 @@ canvas.addEventListener('pointerup', endDrag)
 canvas.addEventListener('pointercancel', endDrag)
 
 let activeBall = null
-let stuckBallTimer = null
+let stationarySince = null
 
 function fireBall(pull) {
   ballInPlay = true
@@ -189,21 +190,12 @@ function fireBall(pull) {
   resultEl.textContent = '공이 굴러가는 중...'
   resultEl.className = 'result-banner rolling'
   activeBall = world.launchBall(pull)
-
-  clearTimeout(stuckBallTimer)
-  stuckBallTimer = setTimeout(() => {
-    world.removeBall(activeBall)
-    activeBall = null
-    ballInPlay = false
-    setBoardRefreshEnabled(true)
-    resultEl.textContent = '공이 자리를 못 잡았어요 - 다시 발사해주세요'
-    resultEl.className = 'result-banner idle'
-  }, STUCK_BALL_TIMEOUT_MS)
+  stationarySince = null
 }
 
 function handleLanding(slotIndex) {
-  clearTimeout(stuckBallTimer)
   activeBall = null
+  stationarySince = null
   const prize = resolveLanding(slotLayout, prizes, slotIndex)
   if (!prize) {
     // 방어적 처리: 닫힌 칸으로 들어간 경우(발생하면 안 되지만) 재발사 기회를 준다.
@@ -233,6 +225,33 @@ function handleLanding(slotIndex) {
     ballInPlay = false
     setBoardRefreshEnabled(true)
   }, 500)
+}
+
+function monitorStuckBall(now) {
+  if (!ballInPlay || !activeBall) {
+    stationarySince = null
+    return
+  }
+
+  if (activeBall.speed > STUCK_SPEED_THRESHOLD) {
+    stationarySince = null
+    return
+  }
+
+  if (stationarySince === null) {
+    stationarySince = now
+    return
+  }
+
+  if (now - stationarySince < STUCK_SETTLE_TIME_MS) return
+
+  world.removeBall(activeBall)
+  activeBall = null
+  stationarySince = null
+  ballInPlay = false
+  setBoardRefreshEnabled(true)
+  resultEl.textContent = '공이 2초 이상 멈춰 있어 다시 발사할 수 있어요'
+  resultEl.className = 'result-banner idle'
 }
 
 function renderPrizePanel() {
@@ -438,7 +457,9 @@ function drawPlunger() {
   }
 }
 
-function loop() {
+function loop(now) {
+  monitorStuckBall(now)
+
   const bg = ctx.createLinearGradient(0, 0, 0, BOARD_HEIGHT)
   bg.addColorStop(0, '#020713')
   bg.addColorStop(0.55, '#06172b')
