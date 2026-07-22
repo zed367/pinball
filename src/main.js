@@ -302,9 +302,9 @@ function drawBody(body) {
   } else if (body.label.startsWith('slot-lid-')) {
     ctx.fillStyle = NEON.closed
     ctx.fill()
-  } else if (body.label.startsWith('slot-sensor-') || body.label === 'lane-rail') {
-    // 감지용 센서, 그리고 레인 벽(콜라이더는 필요하지만 화면엔 drawLaneTube()가
-    // 곡선까지 이어서 파이프 모양으로 대신 그린다) - 여기선 그리지 않는다.
+  } else if (body.label.startsWith('slot-sensor-') || body.label === 'lane-rail' || body.label === 'outer-boundary') {
+    // 감지용 센서, 보드 외곽 안전 경계, 그리고 레인 벽(콜라이더는 필요하지만 화면엔
+    // drawLaneTube()가 곡선까지 이어서 파이프 모양으로 대신 그린다) - 여기선 그리지 않는다.
   } else {
     ctx.fillStyle = NEON.line
     ctx.fill()

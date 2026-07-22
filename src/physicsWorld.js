@@ -11,7 +11,9 @@ export const BOARD_WIDTH = 960
 export const BOARD_HEIGHT = 540
 
 const WALL = 20
-export const FIELD_LEFT = 40
+// 좌·상단의 굵은 내부 벽을 없앤 만큼, 필드는 보드 외곽선 바로 안쪽까지 넓힌다.
+// 20px는 캔버스 테두리와 슬롯 사이에 남기는 최소 여백이다.
+export const FIELD_LEFT = 20
 // 필드-레인 사이 틈이 WALL 두께와 똑같아지도록 LANE_LEFT에 딱 붙여뒀다.
 // (전에는 틈이 40px라 그걸 메우는 벽이 다른 벽(20px)보다 두 배 두꺼워 보였음)
 export const FIELD_RIGHT = 840
@@ -41,15 +43,17 @@ export const LAUNCH_Y = BOARD_HEIGHT - 60
 
 function makeWalls() {
   const opts = { isStatic: true, label: 'wall', friction: 0.05, restitution: 0.2 }
+  // 화면의 CSS 테두리 바깥에만 존재하는 안전 경계. 공이 화면 밖으로 빠지는 것은
+  // 막되, 이전처럼 좌측·상단에 굵은 내부 벽으로 보이지 않게 렌더링에서 숨긴다.
+  const outerBoundaryOpts = { isStatic: true, label: 'outer-boundary', friction: 0.05, restitution: 0.2 }
   // 레인의 곧은 구간(바닥~LANE_CURVE_Y) 좌우 벽 - 콜라이더는 필요하지만 화면엔
   // main.js가 getLaneTubePoints()로 곡선까지 이어서 파이프처럼 그리므로,
   // 여기 박스 렌더는 건너뛰도록 'lane-rail' 라벨을 단다(기본 렌더러가 스킵함).
   const laneOpts = { isStatic: true, label: 'lane-rail', friction: 0.05, restitution: 0.2 }
   return [
-    // 필드 좌측 벽
-    Matter.Bodies.rectangle(FIELD_LEFT - WALL / 2, BOARD_HEIGHT / 2, WALL, BOARD_HEIGHT, opts),
-    // 필드 상단 벽 (레인 위쪽은 열어둬서 발사된 공이 넘어갈 공간을 둔다)
-    Matter.Bodies.rectangle((FIELD_LEFT + FIELD_RIGHT) / 2, WALL / 2, FIELD_RIGHT - FIELD_LEFT + WALL, WALL, opts),
+    // 보드 외곽선에 맞춘 좌·상단 안전 경계. 내부 필드에는 별도 벽을 두지 않는다.
+    Matter.Bodies.rectangle(-WALL / 2, BOARD_HEIGHT / 2, WALL, BOARD_HEIGHT, outerBoundaryOpts),
+    Matter.Bodies.rectangle(BOARD_WIDTH / 2, -WALL / 2, BOARD_WIDTH, WALL, outerBoundaryOpts),
     // 레인 우측 벽 (바깥 테두리) - 곡선이 시작되는 LANE_CURVE_Y까지만 있어야
     // 그 위에서 시작되는 곡선 레일과 이어진다. 끝까지(캔버스 맨 위까지) 쭉 그리면
     // 곡선과 상관없는 직선 조각이 위쪽에 따로 튀어나와 어긋나 보인다.
