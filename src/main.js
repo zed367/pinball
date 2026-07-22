@@ -20,7 +20,6 @@ import {
   buildSlotLayout,
   resolveLanding,
   status,
-  SLOT_COUNTS_BY_PRIZE_INDEX,
 } from './pinballEngine.js'
 
 // 스프링 모양은 고정하고, 사용자가 플런저를 당기는 동안 손잡이만 아래로 움직인다.
@@ -79,7 +78,7 @@ app.innerHTML = `
       <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · PULL &amp; RELEASE</span></h1>
       <button id="board-refresh" class="board-refresh" type="button">
         <span aria-hidden="true">↻</span>
-        <span>판 새로고침 <small>1등 슬롯 다시 섞기</small></span>
+        <span>판 새로고침 <small>1등 위치 가중 랜덤 · 나머지 슬롯 섞기</small></span>
       </button>
       <div class="draw-control" aria-label="연차 선택">
         <div class="draw-counts" role="group" aria-label="연차 선택">
@@ -105,13 +104,41 @@ const prizeListEl = document.querySelector('#prize-list')
 const boardRefreshEl = document.querySelector('#board-refresh')
 const drawCountButtons = [...document.querySelectorAll('[data-draw-count]')]
 
-const SLOT_COUNT = SLOT_COUNTS_BY_PRIZE_INDEX.reduce((total, count) => total + count, 0)
 const DRAW_COUNTS = [1, 5, 10]
+// 1등 위치는 매 판 달라지지만, 물리 검증에서 어려웠던 칸일수록 더 높은 비중을
+// 준다. 특정 위치 고정으로 패턴이 드러나는 문제를 피하면서도 전체 난이도는 유지한다.
+// 슬롯 번호는 왼쪽부터 1번 기준이며, 양 끝(1·10번)은 기존 규칙대로 제외한다.
+const FIRST_PRIZE_SLOT_WEIGHTS = Object.freeze([
+  { slotIndex: 1, weight: 10 }, // 2번
+  { slotIndex: 2, weight: 8 }, // 3번
+  { slotIndex: 3, weight: 5 }, // 4번
+  { slotIndex: 4, weight: 6 }, // 5번
+  { slotIndex: 5, weight: 7 }, // 6번
+  { slotIndex: 6, weight: 12 }, // 7번
+  { slotIndex: 7, weight: 22 }, // 8번
+  { slotIndex: 8, weight: 30 }, // 9번
+])
 let prizes = createDemoPrizes()
-// 1등 칸을 포함해 새 판마다 전체 배치를 다시 섞는다. 공이 이미 발사된 뒤에는
-// 그 회차의 판정이 끝날 때까지 현재 배치를 유지한다.
+// 1등은 가중 랜덤으로 배치하되, 선택된 위치 양옆에 2등이 붙지 않는 배치가 나올
+// 때까지 나머지 슬롯을 다시 섞는다. 공이 이미 발사된 뒤에는 그 회차의 배치를 유지한다.
+function chooseFirstPrizeSlotIndex() {
+  const totalWeight = FIRST_PRIZE_SLOT_WEIGHTS.reduce((total, entry) => total + entry.weight, 0)
+  let ticket = Math.random() * totalWeight
+  for (const entry of FIRST_PRIZE_SLOT_WEIGHTS) {
+    ticket -= entry.weight
+    if (ticket < 0) return entry.slotIndex
+  }
+  return FIRST_PRIZE_SLOT_WEIGHTS.at(-1).slotIndex
+}
+
 function createRandomSlotSequence() {
-  return buildSlotSequence(prizes, undefined, 0, Math.floor(Math.random() * SLOT_COUNT))
+  let sequence
+  let firstPrizeSlotIndex
+  do {
+    firstPrizeSlotIndex = chooseFirstPrizeSlotIndex()
+    sequence = buildSlotSequence(prizes, undefined, 0, firstPrizeSlotIndex)
+  } while (sequence[firstPrizeSlotIndex] !== 0)
+  return sequence
 }
 
 let slotSequence = createRandomSlotSequence()
@@ -203,7 +230,7 @@ function refreshBoard() {
   slotBounds = world.updateSlotSequence(slotSequence, slotLayout)
   renderPrizePanel()
   updateDrawControls()
-  resultEl.textContent = '새 판을 준비했어요 · 1등 슬롯 위치가 바뀌었습니다'
+  resultEl.textContent = '새 판을 준비했어요 · 1등 위치와 나머지 슬롯을 새로 섞었습니다'
   resultEl.className = 'result-banner idle'
 }
 
