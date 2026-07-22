@@ -67,9 +67,11 @@ function makeWalls() {
   // 여기 박스 렌더는 건너뛰도록 'lane-rail' 라벨을 단다(기본 렌더러가 스킵함).
   const laneOpts = { isStatic: true, label: 'lane-rail', friction: 0.05, restitution: 0.2 }
   return [
-    // 보드 외곽선에 맞춘 좌·상단 안전 경계. 내부 필드에는 별도 벽을 두지 않는다.
+    // 보드 외곽선에 맞춘 안전 경계. 오른쪽은 발사대 바깥으로 튄 공이 복구 없이
+    // 사라지지 않도록 최상단까지 이어 두되, 'outer-boundary'라 렌더링에서는 숨긴다.
     Matter.Bodies.rectangle(-WALL / 2, BOARD_HEIGHT / 2, WALL, BOARD_HEIGHT, outerBoundaryOpts),
     Matter.Bodies.rectangle(BOARD_WIDTH / 2, -WALL / 2, BOARD_WIDTH, WALL, outerBoundaryOpts),
+    Matter.Bodies.rectangle(BOARD_WIDTH + WALL / 2, BOARD_HEIGHT / 2, WALL, BOARD_HEIGHT, outerBoundaryOpts),
     // 레인 우측 벽 (바깥 테두리) - 곡선이 시작되는 LANE_CURVE_Y까지만 있어야
     // 그 위에서 시작되는 곡선 레일과 이어진다. 끝까지(캔버스 맨 위까지) 쭉 그리면
     // 곡선과 상관없는 직선 조각이 위쪽에 따로 튀어나와 어긋나 보인다.
