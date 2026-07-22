@@ -6,7 +6,6 @@ import {
   BOARD_HEIGHT,
   LANE_LEFT,
   LANE_RIGHT,
-  LAUNCH_X,
   LAUNCH_Y,
   SLOT_TOP,
   SLOT_FLOOR,
@@ -24,18 +23,16 @@ import {
   SLOT_COUNTS_BY_PRIZE_INDEX,
 } from './pinballEngine.js'
 
-// 공은 항상 LAUNCH_Y의 고정된 자리(위쪽 평평한 턱)에 놓여있다. 그 바로 아래엔
-// 스프링을 담은 통(고정, TUBE_TOP)이 있고, 코일 모양은 고정된 채로만 그린다 -
-// 코일 자체가 압축 애니메이션으로 움직이면 아래쪽 끝이 위로 올라가는 것처럼
-// 보여서 헷갈렸다. 대신 손잡이(원)만 평소 레인 아래쪽에서 쉬다가 당기면 더
-// 아래로 내려가는 걸로 "당기는 느낌"을 낸다 - 코일 밑에서 손잡이까지는 곧은
-// 막대로 이어서, 당긴 만큼 늘어나는 거리를 그 막대가 채운다.
+// 스프링 모양은 고정하고, 연차 발사 때만 손잡이를 짧게 눌렀다 복귀시킨다.
+// 대기 공은 레인 안에 지름보다 넓은 간격으로 쌓아, 5연/10연도 서로 겹쳐 보이지
+// 않게 한다. 발사 버튼을 누르면 이 공들을 같은 프레임에 모두 쏜다.
 const TUBE_TOP = LAUNCH_Y + 20
 const TUBE_HEIGHT = 14
 const MAX_COIL_LEN = 14
 const KNOB_REST_Y = BOARD_HEIGHT - 24
-const MAX_PULL_PX = 20
-const MIN_PULL_RATIO_TO_FIRE = 0.15
+const PLUNGER_PRESS_PX = 16
+const PLUNGER_PRESS_DURATION_MS = 110
+const QUEUE_BALL_GAP = BALL_RADIUS * 2 + 4
 // 발사 시간과 무관하게, 실제 속도가 이 값 아래인 상태가 2초 이어질 때만
 // 공이 끼었거나 멈춘 것으로 보고 회차를 정리한다.
 const STUCK_SPEED_THRESHOLD = 0.08
@@ -74,12 +71,23 @@ app.innerHTML = `
       <canvas id="board" width="${BOARD_WIDTH}" height="${BOARD_HEIGHT}"></canvas>
     </div>
     <div class="side-panel">
-      <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · 1연</span></h1>
+      <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · AUTO DRAW</span></h1>
       <button id="board-refresh" class="board-refresh" type="button">
         <span aria-hidden="true">↻</span>
         <span>판 새로고침 <small>1등 슬롯 다시 섞기</small></span>
       </button>
-      <p class="hint">플런저 레인(오른쪽)을 아래로 당겼다 놓으면 공이 발사돼요.<br />세게 당길수록 힘차게 나가지만, 어느 칸에 들어갈지는 못을 튕기며 정해져서 세기로 결과를 고를 순 없어요.</p>
+      <div class="draw-control" aria-label="연차 선택과 발사">
+        <div class="draw-counts" role="group" aria-label="연차 선택">
+          <button class="draw-count is-selected" type="button" data-draw-count="1" aria-pressed="true">1연</button>
+          <button class="draw-count" type="button" data-draw-count="5" aria-pressed="false">5연</button>
+          <button class="draw-count" type="button" data-draw-count="10" aria-pressed="false">10연</button>
+        </div>
+        <button id="launch-button" class="launch-button" type="button">
+          <span id="launch-label">1연 발사</span>
+          <small id="launch-detail">공 1개를 발사합니다</small>
+        </button>
+      </div>
+      <p class="hint">5연·10연은 레인에 쌓인 공이 버튼 한 번에 모두 발사됩니다.<br />어느 칸에 들어갈지는 못을 튕기며 정해져 결과를 고를 수 없어요.</p>
       <div id="result" class="result-banner idle">공을 발사해보세요</div>
       <div class="prize-panel">
         <h2>재고 현황</h2>
@@ -94,8 +102,13 @@ const ctx = canvas.getContext('2d')
 const resultEl = document.querySelector('#result')
 const prizeListEl = document.querySelector('#prize-list')
 const boardRefreshEl = document.querySelector('#board-refresh')
+const drawCountButtons = [...document.querySelectorAll('[data-draw-count]')]
+const launchButton = document.querySelector('#launch-button')
+const launchLabel = document.querySelector('#launch-label')
+const launchDetail = document.querySelector('#launch-detail')
 
 const SLOT_COUNT = SLOT_COUNTS_BY_PRIZE_INDEX.reduce((total, count) => total + count, 0)
+const DRAW_COUNTS = [1, 5, 10]
 let prizes = createDemoPrizes()
 // 1등 칸을 포함해 새 판마다 전체 배치를 다시 섞는다. 공이 이미 발사된 뒤에는
 // 그 회차의 판정이 끝날 때까지 현재 배치를 유지한다.
@@ -108,6 +121,14 @@ let slotBounds = getSlotBounds(slotSequence)
 let slotLayout = buildSlotLayout(prizes, slotSequence)
 let ballInPlay = false
 let soldOut = false
+let selectedDrawCount = 1
+let queuedBallCount = selectedDrawCount
+let remainingLaunches = 0
+let batchResults = []
+let pullRatio = 0
+let plungerReleaseTimer = null
+let batchFinishTimer = null
+const activeBalls = new Map()
 
 const world = createPhysicsWorld({
   slotSequence,
@@ -115,98 +136,130 @@ const world = createPhysicsWorld({
 })
 world.applySlotLayout(slotLayout)
 renderPrizePanel()
+updateDrawControls()
 
 function setBoardRefreshEnabled(enabled) {
   boardRefreshEl.disabled = !enabled
 }
 
+function getRemainingInventory() {
+  return prizes.reduce((sum, prize) => sum + prize.remaining, 0)
+}
+
+function selectAvailableDrawCount() {
+  const remaining = getRemainingInventory()
+  if (remaining === 0) {
+    selectedDrawCount = 1
+    queuedBallCount = 0
+    return
+  }
+
+  if (selectedDrawCount <= remaining) {
+    queuedBallCount = selectedDrawCount
+    return
+  }
+
+  selectedDrawCount = DRAW_COUNTS.filter((count) => count <= remaining).at(-1) ?? 1
+  queuedBallCount = selectedDrawCount
+}
+
+function updateDrawControls() {
+  const remaining = getRemainingInventory()
+  if (!ballInPlay) selectAvailableDrawCount()
+
+  drawCountButtons.forEach((button) => {
+    const count = Number(button.dataset.drawCount)
+    const selected = count === selectedDrawCount
+    button.disabled = ballInPlay || count > remaining
+    button.classList.toggle('is-selected', selected)
+    button.setAttribute('aria-pressed', String(selected))
+  })
+
+  const canLaunch = !ballInPlay && remaining >= selectedDrawCount && selectedDrawCount > 0
+  launchButton.disabled = !canLaunch
+  launchLabel.textContent = `${selectedDrawCount}연 ${selectedDrawCount === 1 ? '발사' : '동시 발사'}`
+  launchDetail.textContent = canLaunch
+    ? `공 ${selectedDrawCount}개를 한 번에 발사합니다`
+    : remaining === 0
+      ? '모든 재고가 소진되었습니다'
+      : '현재 발사가 진행 중입니다'
+}
+
 function refreshBoard() {
   if (ballInPlay) return
-  activeBall = null
-  stationarySince = null
+  clearTimeout(plungerReleaseTimer)
+  clearTimeout(batchFinishTimer)
+  activeBalls.clear()
   prizes = createDemoPrizes()
   slotSequence = createRandomSlotSequence()
   slotLayout = buildSlotLayout(prizes, slotSequence)
   soldOut = false
   pullRatio = 0
+  batchResults = []
+  remainingLaunches = 0
   slotBounds = world.updateSlotSequence(slotSequence, slotLayout)
   renderPrizePanel()
+  updateDrawControls()
   resultEl.textContent = '새 판을 준비했어요 · 1등 슬롯 위치가 바뀌었습니다'
   resultEl.className = 'result-banner idle'
 }
 
 boardRefreshEl.addEventListener('click', refreshBoard)
 
-// ---- 플런저 드래그(포인터 이벤트) ----
-let dragPointerId = null
-let dragStartY = 0
-let pullRatio = 0
-
-function laneHit(x, y) {
-  return x >= LANE_LEFT && x <= LANE_RIGHT && y >= BOARD_HEIGHT - 220
-}
-
-function canvasPoint(evt) {
-  const rect = canvas.getBoundingClientRect()
-  const scaleX = BOARD_WIDTH / rect.width
-  const scaleY = BOARD_HEIGHT / rect.height
-  return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY }
-}
-
-canvas.addEventListener('pointerdown', (evt) => {
-  if (ballInPlay || soldOut) return
-  const { x, y } = canvasPoint(evt)
-  if (!laneHit(x, y)) return
-  dragPointerId = evt.pointerId
-  dragStartY = y
-  canvas.setPointerCapture(evt.pointerId)
+drawCountButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (ballInPlay || button.disabled) return
+    selectedDrawCount = Number(button.dataset.drawCount)
+    queuedBallCount = selectedDrawCount
+    updateDrawControls()
+  })
 })
 
-canvas.addEventListener('pointermove', (evt) => {
-  if (dragPointerId !== evt.pointerId) return
-  const { y } = canvasPoint(evt)
-  const pulled = Math.max(0, Math.min(MAX_PULL_PX, y - dragStartY))
-  pullRatio = pulled / MAX_PULL_PX
-})
+launchButton.addEventListener('click', startDraw)
 
-function endDrag(evt) {
-  if (dragPointerId !== evt.pointerId) return
-  dragPointerId = null
-  if (pullRatio >= MIN_PULL_RATIO_TO_FIRE) {
-    fireBall(pullRatio)
-  }
-  pullRatio = 0
+function pressPlunger() {
+  clearTimeout(plungerReleaseTimer)
+  pullRatio = 1
+  plungerReleaseTimer = setTimeout(() => {
+    pullRatio = 0
+  }, PLUNGER_PRESS_DURATION_MS)
 }
 
-canvas.addEventListener('pointerup', endDrag)
-canvas.addEventListener('pointercancel', endDrag)
+function startDraw() {
+  if (ballInPlay || soldOut || selectedDrawCount > getRemainingInventory()) return
 
-let activeBall = null
-let stationarySince = null
-
-function fireBall(pull) {
   ballInPlay = true
+  remainingLaunches = selectedDrawCount
+  batchResults = []
   setBoardRefreshEnabled(false)
-  resultEl.textContent = '공이 굴러가는 중...'
+  resultEl.textContent = `${selectedDrawCount}개 공이 동시에 굴러가는 중...`
   resultEl.className = 'result-banner rolling'
-  activeBall = world.launchBall(pull)
-  stationarySince = null
+  pressPlunger()
+
+  // 하나씩 시간차로 쏘지 않고, 쌓여 있던 모든 공을 같은 프레임에 올려보낸다.
+  // 시작 y만 다르게 둬서 공끼리 겹치지 않으며, 모두 같은 순간에 속도를 받는다.
+  for (let index = 0; index < remainingLaunches; index += 1) {
+    const ball = world.launchBall(1, { startY: LAUNCH_Y - index * QUEUE_BALL_GAP })
+    activeBalls.set(ball, { stationarySince: null })
+  }
+  queuedBallCount = 0
+  remainingLaunches = 0
+  updateDrawControls()
 }
 
-function handleLanding(slotIndex) {
-  activeBall = null
-  stationarySince = null
+function handleLanding(slotIndex, ball) {
+  activeBalls.delete(ball)
   const prize = resolveLanding(slotLayout, prizes, slotIndex)
   if (!prize) {
-    // 방어적 처리: 닫힌 칸으로 들어간 경우(발생하면 안 되지만) 재발사 기회를 준다.
-    resultEl.textContent = '판정 불가 - 다시 발사해주세요'
-    resultEl.className = 'result-banner idle'
-    ballInPlay = false
-    setBoardRefreshEnabled(true)
+    batchResults.push('판정 불가')
+    resultEl.textContent = `${batchResults.length}개 공 판정 완료 · 마감 칸에 도착한 공이 있어요`
+    resultEl.className = 'result-banner rolling'
+    finishBatchIfReady()
     return
   }
 
-  resultEl.textContent = `${prize.name} 당첨!`
+  batchResults.push(prize.name)
+  resultEl.textContent = `${batchResults.length}개 공 판정 완료 · ${prize.name} 당첨!`
   resultEl.style.setProperty('--glow', prize.glow)
   resultEl.className = 'result-banner win'
 
@@ -214,44 +267,70 @@ function handleLanding(slotIndex) {
   world.applySlotLayout(slotLayout)
   renderPrizePanel()
 
-  const totalRemaining = prizes.reduce((sum, p) => sum + p.remaining, 0)
-  if (totalRemaining <= 0) {
-    soldOut = true
-    resultEl.textContent = '모든 재고가 소진되었습니다'
-    resultEl.className = 'result-banner idle'
-  }
-
-  setTimeout(() => {
-    ballInPlay = false
-    setBoardRefreshEnabled(true)
-  }, 500)
+  finishBatchIfReady()
 }
 
-function monitorStuckBall(now) {
-  if (!ballInPlay || !activeBall) {
-    stationarySince = null
-    return
-  }
+function formatBatchResults() {
+  const counts = new Map()
+  batchResults.forEach((name) => counts.set(name, (counts.get(name) ?? 0) + 1))
+  return [...counts.entries()]
+    .map(([name, count]) => `${name} ×${count}`)
+    .join(' · ')
+}
 
-  if (activeBall.speed > STUCK_SPEED_THRESHOLD) {
-    stationarySince = null
-    return
-  }
+function finishBatchIfReady() {
+  if (!ballInPlay || remainingLaunches > 0 || activeBalls.size > 0 || batchFinishTimer) return
 
-  if (stationarySince === null) {
-    stationarySince = now
-    return
-  }
+  // 센서에 닿은 공은 physicsWorld에서 350ms 뒤 화면에서 제거된다. 그 짧은
+  // 마무리 시간을 지켜야 다음 연차가 직전 회차의 공과 겹쳐 시작되지 않는다.
+  batchFinishTimer = setTimeout(() => {
+    batchFinishTimer = null
+    if (!ballInPlay || remainingLaunches > 0 || activeBalls.size > 0) return
 
-  if (now - stationarySince < STUCK_SETTLE_TIME_MS) return
+    completeBatch()
+  }, 360)
+}
 
-  world.removeBall(activeBall)
-  activeBall = null
-  stationarySince = null
+function completeBatch() {
   ballInPlay = false
+  soldOut = getRemainingInventory() <= 0
   setBoardRefreshEnabled(true)
-  resultEl.textContent = '공이 2초 이상 멈춰 있어 다시 발사할 수 있어요'
-  resultEl.className = 'result-banner idle'
+  updateDrawControls()
+
+  if (soldOut) {
+    resultEl.textContent = '모든 재고가 소진되었습니다'
+    resultEl.className = 'result-banner idle'
+    return
+  }
+
+  resultEl.textContent = `${batchResults.length}연 완료 · ${formatBatchResults() || '판정 불가'}`
+  resultEl.className = 'result-banner win'
+}
+
+function monitorStuckBalls(now) {
+  if (!ballInPlay) return
+
+  for (const [ball, tracking] of activeBalls) {
+    if (ball.speed > STUCK_SPEED_THRESHOLD) {
+      tracking.stationarySince = null
+      continue
+    }
+
+    if (tracking.stationarySince === null) {
+      tracking.stationarySince = now
+      continue
+    }
+
+    if (now - tracking.stationarySince < STUCK_SETTLE_TIME_MS) continue
+
+    world.removeBall(ball)
+    activeBalls.delete(ball)
+    batchResults.push('끼임')
+    resultEl.textContent = `${batchResults.length}개 공 판정 완료 · 2초 이상 멈춘 공을 정리했어요`
+    resultEl.className = 'result-banner rolling'
+  }
+
+  finishBatchIfReady()
 }
 
 function renderPrizePanel() {
@@ -378,8 +457,8 @@ function drawSlots() {
 
 function drawPlunger() {
   const laneX = (LANE_LEFT + LANE_RIGHT) / 2
-  // 손잡이(원)는 평소 아래쪽에 있다가, 당기면 더 아래로(캔버스 바닥 쪽으로) 내려간다.
-  const pistonY = KNOB_REST_Y + pullRatio * MAX_PULL_PX
+  // 자동 발사 때만 손잡이가 짧게 눌린다.
+  const pistonY = KNOB_REST_Y + pullRatio * PLUNGER_PRESS_PX
 
   // 스프링을 담은 통(고정, 안 움직임)
   ctx.fillStyle = '#0b2d49'
@@ -432,9 +511,9 @@ function drawPlunger() {
   ctx.stroke()
   ctx.restore()
 
-  // 대기 중인 공 - 스프링을 당겨도 움직이지 않고, 발사 지점(LAUNCH_Y)의 평평한
-  // 턱 위에 항상 고정으로 놓여있다. 놓으면 스프링이 튀어올라 이 공을 때려서 쏜다.
-  if (!ballInPlay) {
+  // 연차에 맞춰 공을 레인 안에 쌓아 보인다. 실제 발사도 이와 같은 간격의 위치에서
+  // 한 프레임에 이루어져, 5개·10개가 서로 겹치거나 순차 발사로 보이지 않는다.
+  if (queuedBallCount > 0) {
     ctx.strokeStyle = '#38bdf8'
     ctx.lineWidth = 4
     ctx.lineCap = 'round'
@@ -443,22 +522,25 @@ function drawPlunger() {
     ctx.lineTo(laneX + 16, LAUNCH_Y + BALL_RADIUS + 2)
     ctx.stroke()
 
-    ctx.beginPath()
-    ctx.arc(laneX, LAUNCH_Y, BALL_RADIUS, 0, Math.PI * 2)
-    ctx.save()
-    ctx.fillStyle = NEON.ballCore
-    ctx.shadowColor = NEON.cyan
-    ctx.shadowBlur = 18
-    ctx.fill()
-    ctx.lineWidth = 2
-    ctx.strokeStyle = NEON.ballEdge
-    ctx.stroke()
-    ctx.restore()
+    for (let index = queuedBallCount - 1; index >= 0; index -= 1) {
+      const y = LAUNCH_Y - index * QUEUE_BALL_GAP
+      ctx.beginPath()
+      ctx.arc(laneX, y, BALL_RADIUS, 0, Math.PI * 2)
+      ctx.save()
+      ctx.fillStyle = NEON.ballCore
+      ctx.shadowColor = NEON.cyan
+      ctx.shadowBlur = 18
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = NEON.ballEdge
+      ctx.stroke()
+      ctx.restore()
+    }
   }
 }
 
 function loop(now) {
-  monitorStuckBall(now)
+  monitorStuckBalls(now)
 
   const bg = ctx.createLinearGradient(0, 0, 0, BOARD_HEIGHT)
   bg.addColorStop(0, '#020713')

@@ -221,8 +221,7 @@ body::before {
   border: 1px solid rgba(125, 211, 252, 0.45);
   border-radius: 15px;
   box-shadow: 0 0 22px rgba(14, 165, 233, 0.18) inset;
-  touch-action: none;
-  cursor: ns-resize;
+  cursor: default;
 }
 
 .side-panel {
@@ -305,6 +304,81 @@ body::before {
 .board-refresh:disabled {
   opacity: 0.46;
   cursor: not-allowed;
+}
+
+.draw-control {
+  display: grid;
+  gap: 8px;
+}
+
+.draw-counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.draw-count,
+.launch-button {
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  color: #b9e9ff;
+  background: linear-gradient(145deg, rgba(7, 32, 54, 0.96), rgba(3, 12, 25, 0.96));
+  box-shadow: 0 0 13px rgba(14, 165, 233, 0.12) inset;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.draw-count {
+  min-height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.draw-count:hover:not(:disabled),
+.draw-count.is-selected {
+  border-color: #38bdf8;
+  color: #e0f7ff;
+  background: linear-gradient(145deg, rgba(8, 70, 107, 0.98), rgba(5, 28, 51, 0.98));
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.42), 0 0 15px rgba(14, 165, 233, 0.24) inset;
+}
+
+.draw-count:focus-visible,
+.launch-button:focus-visible {
+  outline: 2px solid #e0f7ff;
+  outline-offset: 3px;
+}
+
+.draw-count:disabled,
+.launch-button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.launch-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 9px 12px;
+  border-color: rgba(56, 189, 248, 0.78);
+  border-radius: 12px;
+  color: #e0f7ff;
+  background: linear-gradient(110deg, rgba(5, 75, 112, 0.98), rgba(4, 29, 54, 0.98));
+  box-shadow: 0 0 17px rgba(14, 165, 233, 0.32), 0 0 20px rgba(14, 165, 233, 0.22) inset;
+  font-size: 15px;
+}
+
+.launch-button:hover:not(:disabled) {
+  border-color: #bae6fd;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.48), 0 0 24px rgba(14, 165, 233, 0.3) inset;
+  transform: translateY(-1px);
+}
+
+.launch-button small {
+  color: #8cc8e6;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .hint {
@@ -463,6 +537,21 @@ body::before {
 
   .board-refresh > span:first-child {
     font-size: 21px;
+  }
+
+  .draw-control {
+    gap: 6px;
+  }
+
+  .draw-count {
+    min-height: 32px;
+    font-size: 12px;
+  }
+
+  .launch-button {
+    min-height: 42px;
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
   .hint {

@@ -1,4 +1,4 @@
-// Matter.js 물리 월드 구성 - 가로형(컴팩트) 변형, 1연(공 1개) 발사용.
+// Matter.js 물리 월드 구성 - 가로형(컴팩트) 변형, 1·5·10연 동시 발사용.
 // 벽 두께를 넉넉히 두고 iteration을 기본보다 높이고 고정 타임스텝 러너를 써서
 // "콜라이더 미적용/터널링"(문서 9장 이슈)을 구조적으로 막는 데 초점을 둔다.
 //
@@ -292,12 +292,10 @@ export function createPhysicsWorld({ slotSequence, onLanding }) {
     return bounds
   }
 
-  // pullRatio(0~1)만큼 발사 속도가 커진다 - 살짝 당기면 약하게, 최대로 당기면
-  // 세게 나가서 당기는 느낌과 실제 발사가 일치한다. 그래도 어느 칸에 들어갈지는
-  // 못밭을 지나며 생기는 카오스적 튕김이 정하므로(문서 3장 원칙 2), 같은 세기로
-  // 쏴도 결과 칸은 매번 달라진다 - 그 무작위성은 x축 미세 편차에서 나온다.
-  function launchBall(pullRatio = 1) {
-    const ball = Matter.Bodies.circle(LAUNCH_X, LAUNCH_Y, BALL_RADIUS, {
+  // startY를 지정하면 레인에 쌓여 있던 여러 공을 간격만 다르게 하여 같은 프레임에
+  // 발사할 수 있다. x축 미세 편차는 같은 순간에 쏴도 각 공의 궤적이 갈리게 한다.
+  function launchBall(pullRatio = 1, { startY = LAUNCH_Y } = {}) {
+    const ball = Matter.Bodies.circle(LAUNCH_X, startY, BALL_RADIUS, {
       restitution: 0.45,
       friction: 0.02,
       frictionAir: 0.0006,
