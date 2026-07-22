@@ -26,6 +26,8 @@ export const BALL_RADIUS = 9
 export const SLOT_TOP = 420
 export const SLOT_FLOOR = 520
 const SLOT_SENSOR_Y = 502
+// 등수별 물리 슬롯 폭 비율. 1등이 가장 좁고 4등이 가장 넓다.
+const SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX = [1, 2, 3, 4]
 
 // 이 높이(y) 위로는 레인이 곡선으로 꺾여 필드 쪽으로 이어진다.
 export const LANE_CURVE_Y = 170
@@ -172,17 +174,25 @@ function makePegs() {
   return pegs
 }
 
-// 칸을 등급 수(slotCount)만큼 똑같은 너비로 나눈다. 이제 등급별 희귀도는 너비가
-// 아니라 "그 등급이 몇 칸을 차지하는지"(pinballEngine.js의 SLOT_COUNTS_BY_PRIZE_INDEX)와
-// "어디에 배치되는지"(1등은 항상 가장 도달하기 어려운 칸)로 표현한다.
-export function getSlotBounds(slotCount) {
-  const width = (FIELD_RIGHT - FIELD_LEFT) / slotCount
-  const bounds = []
-  for (let i = 0; i < slotCount; i += 1) {
-    const x = FIELD_LEFT + width * i
-    bounds.push({ x, width, center: x + width / 2 })
-  }
-  return bounds
+// 등수 배열(slotSequence)을 받아 칸별 폭을 계산한다. 각 슬롯은 등수에 따라
+// 1등 1단위, 2등 2단위, 3등 3단위, 4등 4단위 폭을 갖는다. 새로고침으로
+// 등수의 순서가 바뀌어도 해당 등수의 실제 폭과 충돌 영역이 함께 이동한다.
+export function getSlotBounds(slotSequence) {
+  const totalWeight = slotSequence.reduce(
+    (sum, prizeIndex) => sum + (SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX[prizeIndex] ?? 1),
+    0
+  )
+  const unitWidth = (FIELD_RIGHT - FIELD_LEFT) / totalWeight
+  let x = FIELD_LEFT
+
+  return slotSequence.map((prizeIndex, index) => {
+    const weight = SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX[prizeIndex] ?? 1
+    // 부동소수점 오차가 마지막 칸에 남지 않도록 끝 칸은 필드 우측에 정확히 맞춘다.
+    const width = index === slotSequence.length - 1 ? FIELD_RIGHT - x : unitWidth * weight
+    const bound = { x, width, center: x + width / 2 }
+    x += width
+    return bound
+  })
 }
 
 function makeSlotDividers(bounds) {
@@ -220,7 +230,7 @@ function makeSlotLid(slotIndex, bounds) {
   })
 }
 
-export function createPhysicsWorld({ slotCount, onLanding }) {
+export function createPhysicsWorld({ slotSequence, onLanding }) {
   const engine = Matter.Engine.create()
   // 1보다 살짝 낮춰서 발사된 공이 좀 더 오래 떠 있게(체공 시간 확보) 했다 -
   // 안 그러면 속도를 아무리 올려도 금방 떨어져서 멀리 못 간다.
@@ -230,13 +240,13 @@ export function createPhysicsWorld({ slotCount, onLanding }) {
   engine.velocityIterations = 10
 
   const world = engine.world
-  const bounds = getSlotBounds(slotCount)
+  let bounds = getSlotBounds(slotSequence)
+  let slotBodies = [...makeSlotDividers(bounds), ...makeSlotSensors(bounds)]
   const staticBodies = [
     ...makeWalls(),
     ...makeLaneCurve(),
     ...makePegs(),
-    ...makeSlotDividers(bounds),
-    ...makeSlotSensors(bounds),
+    ...slotBodies,
   ]
   Matter.Composite.add(world, staticBodies)
 
@@ -268,6 +278,15 @@ export function createPhysicsWorld({ slotCount, onLanding }) {
         lids.set(slot.index, lid)
       }
     }
+  }
+
+  function updateSlotSequence(nextSlotSequence, slotLayout) {
+    for (const body of slotBodies) Matter.Composite.remove(world, body)
+    bounds = getSlotBounds(nextSlotSequence)
+    slotBodies = [...makeSlotDividers(bounds), ...makeSlotSensors(bounds)]
+    Matter.Composite.add(world, slotBodies)
+    applySlotLayout(slotLayout)
+    return bounds
   }
 
   // pullRatio(0~1)만큼 발사 속도가 커진다 - 살짝 당기면 약하게, 최대로 당기면
@@ -305,6 +324,7 @@ export function createPhysicsWorld({ slotCount, onLanding }) {
     engine,
     launchBall,
     applySlotLayout,
+    updateSlotSequence,
     removeBall,
     destroy,
   }

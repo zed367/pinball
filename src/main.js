@@ -104,13 +104,13 @@ function createRandomSlotSequence() {
 }
 
 let slotSequence = createRandomSlotSequence()
-const slotBounds = getSlotBounds(SLOT_COUNT)
+let slotBounds = getSlotBounds(slotSequence)
 let slotLayout = buildSlotLayout(prizes, slotSequence)
 let ballInPlay = false
 let soldOut = false
 
 const world = createPhysicsWorld({
-  slotCount: slotSequence.length,
+  slotSequence,
   onLanding: handleLanding,
 })
 world.applySlotLayout(slotLayout)
@@ -129,7 +129,7 @@ function refreshBoard() {
   slotLayout = buildSlotLayout(prizes, slotSequence)
   soldOut = false
   pullRatio = 0
-  world.applySlotLayout(slotLayout)
+  slotBounds = world.updateSlotSequence(slotSequence, slotLayout)
   renderPrizePanel()
   resultEl.textContent = '새 판을 준비했어요 · 1등 슬롯 위치가 바뀌었습니다'
   resultEl.className = 'result-banner idle'
