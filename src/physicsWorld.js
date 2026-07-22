@@ -11,9 +11,10 @@ export const BOARD_WIDTH = 960
 export const BOARD_HEIGHT = 540
 
 const WALL = 20
-// 좌·상단의 굵은 내부 벽을 없앤 만큼, 필드는 보드 외곽선 바로 안쪽까지 넓힌다.
-// 20px는 캔버스 테두리와 슬롯 사이에 남기는 최소 여백이다.
-export const FIELD_LEFT = 20
+// 왼쪽 여백은 슬롯 바깥으로 떨어진 공이 끼는 통로가 되므로 남기지 않는다.
+// 첫 슬롯 구분벽을 외곽 안전 경계와 겹치는 x=0에 두어, 하단 등수 영역을
+// 보드 왼쪽 끝부터 레인 앞까지 빈틈없이 채운다.
+export const FIELD_LEFT = 0
 // 필드-레인 사이 틈이 WALL 두께와 똑같아지도록 LANE_LEFT에 딱 붙여뒀다.
 // (전에는 틈이 40px라 그걸 메우는 벽이 다른 벽(20px)보다 두 배 두꺼워 보였음)
 export const FIELD_RIGHT = 875
