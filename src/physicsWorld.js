@@ -35,10 +35,11 @@ const SLOT_SENSOR_Y = 502
 // 필드를 항상 끝까지 채우고, 4등이 가장 넓은 칸이 되도록 한다.
 const SLOT_WIDTHS_BY_PRIZE_INDEX = [50, 75, 88, null]
 
-// 이 높이(y) 위로는 기존 곡선 레일이 이어지되, 첫 번째 못 줄 바로 위에서
-// 상단 구간만 잘라 끝낸다.
+// 이 높이(y) 위로는 기존 곡선 레일이 이어지되, 첫 번째 못 줄보다 조금 더 높은
+// 지점에서 상단 구간만 잘라 끝낸다. 공이 발사대 쪽으로 되돌아가지 않을 만큼만
+// 왼쪽 방향을 더 확보한다.
 export const LANE_CURVE_Y = 196
-const LANE_CURVE_EXIT_Y = PEG_START_Y - PEG_ROW_GAP
+const LANE_CURVE_EXIT_Y = PEG_START_Y - PEG_ROW_GAP - 20
 const LANE_CURVE_FULL_TOP_Y = 18
 const LANE_CURVE_FULL_EXIT_X = 650
 // 기존 곡선 y(t) = topY + (curveY - topY) * (1 - t)^2 에서 exitY가 되는 t.
@@ -144,8 +145,8 @@ function quadraticBezierPoints(p0, control, p1, steps = 16, endT = 1) {
 export function getLaneTubePoints() {
   const outer = [
     { x: LANE_RIGHT, y: BOARD_HEIGHT },
-    // 원래의 부드러운 베지어 곡선 그대로 시작한 뒤, 첫 번째 못 줄의 한 칸 위에서
-    // 잘라 낸다. 새 모서리나 새 꺾임을 만들지 않아 기존 출발 감각은 유지된다.
+    // 원래의 부드러운 베지어 곡선 그대로 시작한 뒤, 첫 번째 못 줄보다 조금 더
+    // 높은 지점에서 잘라 낸다. 새 모서리나 새 꺾임을 만들지 않아 기존 출발 감각은 유지된다.
     ...quadraticBezierPoints(
       { x: LANE_RIGHT, y: LANE_CURVE_Y },
       { x: LANE_RIGHT, y: LANE_CURVE_FULL_TOP_Y },
