@@ -25,6 +25,8 @@ export const LANE_RIGHT = 945
 
 export const PEG_RADIUS = 7
 export const BALL_RADIUS = 9
+const PEG_START_Y = 165
+const PEG_ROW_GAP = 38
 
 export const SLOT_TOP = 420
 export const SLOT_FLOOR = 520
@@ -33,10 +35,10 @@ const SLOT_SENSOR_Y = 502
 // 필드를 항상 끝까지 채우고, 4등이 가장 넓은 칸이 되도록 한다.
 const SLOT_WIDTHS_BY_PRIZE_INDEX = [50, 75, 88, null]
 
-// 이 높이(y) 위로는 레인이 넓은 곡선으로 꺾여 필드 쪽으로 이어진다.
+// 이 높이(y) 위로는 레인이 짧은 곡선으로 꺾여 첫 번째 못 줄 바로 위에서 끝난다.
 export const LANE_CURVE_Y = 196
-const LANE_CURVE_TOP_Y = 18
-const LANE_CURVE_EXIT_X = 650
+const LANE_CURVE_EXIT_Y = PEG_START_Y - PEG_ROW_GAP
+const LANE_CURVE_EXIT_X = 790
 
 // 발사 속도: 당김 비율(0~1)에 비례해서 정해진다 - 살짝 당기면 약하게, 최대로
 // 당기면 세게 나가서 "당기는 느낌"이 눈에 보이게 했다. 다만 어느 칸에 들어가는지는
@@ -134,12 +136,12 @@ function quadraticBezierPoints(p0, control, p1, steps = 16) {
 export function getLaneTubePoints() {
   const outer = [
     { x: LANE_RIGHT, y: BOARD_HEIGHT },
-    // 시작점을 조금 더 아래로, 출구를 보드 상단 가까이·왼쪽으로 옮겨서 이전보다
-    // 반경이 큰 완만한 90도 곡선으로 만들었다.
+    // 보드 상단까지 타고 넘어가던 긴 가이드는 제거했다. 곡선은 첫 번째 못 줄의
+    // 한 칸 위에서 끝나며, 공은 그 끝에서 바로 못밭으로 떨어진다.
     ...quadraticBezierPoints(
       { x: LANE_RIGHT, y: LANE_CURVE_Y },
-      { x: LANE_RIGHT, y: LANE_CURVE_TOP_Y },
-      { x: LANE_CURVE_EXIT_X, y: LANE_CURVE_TOP_Y }
+      { x: LANE_RIGHT, y: LANE_CURVE_EXIT_Y },
+      { x: LANE_CURVE_EXIT_X, y: LANE_CURVE_EXIT_Y }
     ),
   ]
   return { outer }
@@ -166,11 +168,9 @@ function makeLaneCurve() {
 function makePegs() {
   const pegs = []
   const rows = 6
-  const rowGap = 38
   const colGap = 54
-  const startY = 165
   for (let row = 0; row < rows; row += 1) {
-    const y = startY + row * rowGap
+    const y = PEG_START_Y + row * PEG_ROW_GAP
     const offset = row % 2 === 0 ? 0 : colGap / 2
     for (let x = FIELD_LEFT + 40 + offset; x < FIELD_RIGHT - 20; x += colGap) {
       pegs.push(
