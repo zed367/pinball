@@ -35,10 +35,16 @@ const SLOT_SENSOR_Y = 502
 // 필드를 항상 끝까지 채우고, 4등이 가장 넓은 칸이 되도록 한다.
 const SLOT_WIDTHS_BY_PRIZE_INDEX = [50, 75, 88, null]
 
-// 이 높이(y) 위로는 레인이 짧은 곡선으로 꺾여 첫 번째 못 줄 바로 위에서 끝난다.
+// 이 높이(y) 위로는 기존 곡선 레일이 이어지되, 첫 번째 못 줄 바로 위에서
+// 상단 구간만 잘라 끝낸다.
 export const LANE_CURVE_Y = 196
 const LANE_CURVE_EXIT_Y = PEG_START_Y - PEG_ROW_GAP
-const LANE_CURVE_EXIT_X = 790
+const LANE_CURVE_FULL_TOP_Y = 18
+const LANE_CURVE_FULL_EXIT_X = 650
+// 기존 곡선 y(t) = topY + (curveY - topY) * (1 - t)^2 에서 exitY가 되는 t.
+// 이 값까지만 샘플링하면 곡선의 각도나 반경을 바꾸지 않고 위쪽만 정확히 자른다.
+const LANE_CURVE_CUT_T =
+  1 - Math.sqrt((LANE_CURVE_EXIT_Y - LANE_CURVE_FULL_TOP_Y) / (LANE_CURVE_Y - LANE_CURVE_FULL_TOP_Y))
 
 // 발사 속도: 당김 비율(0~1)에 비례해서 정해진다 - 살짝 당기면 약하게, 최대로
 // 당기면 세게 나가서 "당기는 느낌"이 눈에 보이게 했다. 다만 어느 칸에 들어가는지는
@@ -116,10 +122,10 @@ function makeRail(points, thickness = 16, label = 'wall') {
 // 2차 베지어 곡선을 잘게 쪼갠 점들로 샘플링한다. 점 3~4개를 손으로 찍어 이으면
 // 꺾이는 각이 커서 눈에 띄게 각져 보이는데, 이렇게 한 번에 15개 안팎으로 잘게
 // 나누면 각 조각 사이 각도 차이가 거의 없어져 실제로 매끈한 곡선처럼 보인다.
-function quadraticBezierPoints(p0, control, p1, steps = 16) {
+function quadraticBezierPoints(p0, control, p1, steps = 16, endT = 1) {
   const points = []
   for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps
+    const t = (i / steps) * endT
     const mt = 1 - t
     points.push({
       x: mt * mt * p0.x + 2 * mt * t * control.x + t * t * p1.x,
@@ -136,12 +142,14 @@ function quadraticBezierPoints(p0, control, p1, steps = 16) {
 export function getLaneTubePoints() {
   const outer = [
     { x: LANE_RIGHT, y: BOARD_HEIGHT },
-    // 보드 상단까지 타고 넘어가던 긴 가이드는 제거했다. 곡선은 첫 번째 못 줄의
-    // 한 칸 위에서 끝나며, 공은 그 끝에서 바로 못밭으로 떨어진다.
+    // 원래의 부드러운 베지어 곡선 그대로 시작한 뒤, 첫 번째 못 줄의 한 칸 위에서
+    // 잘라 낸다. 새 모서리나 새 꺾임을 만들지 않아 기존 출발 감각은 유지된다.
     ...quadraticBezierPoints(
       { x: LANE_RIGHT, y: LANE_CURVE_Y },
-      { x: LANE_RIGHT, y: LANE_CURVE_EXIT_Y },
-      { x: LANE_CURVE_EXIT_X, y: LANE_CURVE_EXIT_Y }
+      { x: LANE_RIGHT, y: LANE_CURVE_FULL_TOP_Y },
+      { x: LANE_CURVE_FULL_EXIT_X, y: LANE_CURVE_FULL_TOP_Y },
+      16,
+      LANE_CURVE_CUT_T
     ),
   ]
   return { outer }
