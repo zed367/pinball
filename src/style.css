@@ -91,6 +91,14 @@ body::before {
   opacity: 0;
 }
 
+.hero-banner--image::after {
+  background: linear-gradient(90deg, rgba(1, 6, 16, 0.12), rgba(2, 7, 18, 0.03));
+}
+
+.hero-banner--image .hero-banner__content {
+  display: none;
+}
+
 .hero-banner__orb {
   position: absolute;
   display: block;

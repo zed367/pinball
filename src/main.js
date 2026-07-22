@@ -55,8 +55,8 @@ const NEON = Object.freeze({
 
 const app = document.querySelector('#app')
 app.innerHTML = `
-  <section class="hero-banner" aria-label="핀볼 쿠지 배너">
-    <img id="banner-image" class="hero-banner__image" alt="" hidden />
+  <section class="hero-banner hero-banner--image" aria-label="핀볼 쿠지 배너">
+    <img id="banner-image" class="hero-banner__image" src="/banner.webp" alt="주술회전 캐릭터 배너" />
     <div class="hero-banner__art" aria-hidden="true">
       <span class="hero-banner__orb hero-banner__orb--large"></span>
       <span class="hero-banner__orb hero-banner__orb--small"></span>
