@@ -17,10 +17,10 @@ export class Prize {
 // 1단계 검증용 placeholder 수량.
 export function createDemoPrizes() {
   return [
-    new Prize({ grade: 1, name: '1등', total: 1, glow: '#e0f7ff' }),
-    new Prize({ grade: 2, name: '2등', total: 3, glow: '#7dd3fc' }),
+    new Prize({ grade: 1, name: '1등', total: 1, glow: '#fde047' }),
+    new Prize({ grade: 2, name: '2등', total: 3, glow: '#c084fc' }),
     new Prize({ grade: 3, name: '3등', total: 6, glow: '#38bdf8' }),
-    new Prize({ grade: 4, name: '4등', total: 10, glow: '#0ea5e9' }),
+    new Prize({ grade: 4, name: '4등', total: 10, glow: '#4ade80' }),
   ]
 }
 
@@ -29,10 +29,14 @@ export function createDemoPrizes() {
 // 적게 줘서 실제로 맞히기 어렵게 만든다. prizes 배열 순서([1등,2등,3등,4등])에 맞춘다.
 export const SLOT_COUNTS_BY_PRIZE_INDEX = [1, 2, 3, 4]
 
-// 칸 배치를 만든다: prizes[0](1등, 가장 희귀)은 항상 맨 오른쪽 칸(실제로 확인해보니
-// 발사 경로상 가장 도달하기 어려운 자리는 오른쪽이었다)에 고정하고, 나머지 등급들은
-// 남은 칸에 무작위로 섞는다.
-export function buildSlotSequence(prizes, slotCounts = SLOT_COUNTS_BY_PRIZE_INDEX, hardestPrizeIndex = 0) {
+// 칸 배치를 만든다. 가장 희귀한 등수는 `hardestSlotIndex`로 지정한 위치에 넣고,
+// 나머지 등수는 무작위로 섞는다. 위치를 생략하면 기존처럼 마지막 칸에 배치한다.
+export function buildSlotSequence(
+  prizes,
+  slotCounts = SLOT_COUNTS_BY_PRIZE_INDEX,
+  hardestPrizeIndex = 0,
+  hardestSlotIndex = null
+) {
   const rest = []
   prizes.forEach((_, prizeIndex) => {
     if (prizeIndex === hardestPrizeIndex) return
@@ -42,7 +46,10 @@ export function buildSlotSequence(prizes, slotCounts = SLOT_COUNTS_BY_PRIZE_INDE
     const j = Math.floor(Math.random() * (i + 1))
     ;[rest[i], rest[j]] = [rest[j], rest[i]]
   }
-  return [...rest, hardestPrizeIndex]
+  const targetIndex =
+    hardestSlotIndex === null ? rest.length : Math.max(0, Math.min(rest.length, Math.floor(hardestSlotIndex)))
+  rest.splice(targetIndex, 0, hardestPrizeIndex)
+  return rest
 }
 
 // 발사 직전, 지금 재고 상태에 맞춰 칸의 등급 구성을 세팅한다. slotSequence(칸 인덱스 ->

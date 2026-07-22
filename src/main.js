@@ -15,7 +15,14 @@ import {
   getLaneInnerWallLine,
   getSlotBounds,
 } from './physicsWorld.js'
-import { createDemoPrizes, buildSlotSequence, buildSlotLayout, resolveLanding, status } from './pinballEngine.js'
+import {
+  createDemoPrizes,
+  buildSlotSequence,
+  buildSlotLayout,
+  resolveLanding,
+  status,
+  SLOT_COUNTS_BY_PRIZE_INDEX,
+} from './pinballEngine.js'
 
 // 공은 항상 LAUNCH_Y의 고정된 자리(위쪽 평평한 턱)에 놓여있다. 그 바로 아래엔
 // 스프링을 담은 통(고정, TUBE_TOP)이 있고, 코일 모양은 고정된 채로만 그린다 -
@@ -47,12 +54,30 @@ const NEON = Object.freeze({
 
 const app = document.querySelector('#app')
 app.innerHTML = `
+  <section class="hero-banner" aria-label="핀볼 쿠지 배너">
+    <img id="banner-image" class="hero-banner__image" alt="" hidden />
+    <div class="hero-banner__art" aria-hidden="true">
+      <span class="hero-banner__orb hero-banner__orb--large"></span>
+      <span class="hero-banner__orb hero-banner__orb--small"></span>
+      <span class="hero-banner__grid"></span>
+    </div>
+    <div class="hero-banner__content">
+      <p class="hero-banner__eyebrow">PINBALL KUJI · NEON EDITION</p>
+      <h1>NEON PRIZE DROP</h1>
+      <p>플런저를 당겨 오늘의 경품 슬롯을 노려보세요.</p>
+      <span class="hero-banner__image-note">BANNER IMAGE READY</span>
+    </div>
+  </section>
   <div class="pinball-layout">
     <div class="board-panel">
       <canvas id="board" width="${BOARD_WIDTH}" height="${BOARD_HEIGHT}"></canvas>
     </div>
     <div class="side-panel">
       <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · 1연</span></h1>
+      <button id="board-refresh" class="board-refresh" type="button">
+        <span aria-hidden="true">↻</span>
+        <span>판 새로고침 <small>1등 슬롯 다시 섞기</small></span>
+      </button>
       <p class="hint">플런저 레인(오른쪽)을 아래로 당겼다 놓으면 공이 발사돼요.<br />세게 당길수록 힘차게 나가지만, 어느 칸에 들어갈지는 못을 튕기며 정해져서 세기로 결과를 고를 순 없어요.</p>
       <div id="result" class="result-banner idle">공을 발사해보세요</div>
       <div class="prize-panel">
@@ -67,13 +92,18 @@ const canvas = document.querySelector('#board')
 const ctx = canvas.getContext('2d')
 const resultEl = document.querySelector('#result')
 const prizeListEl = document.querySelector('#prize-list')
+const boardRefreshEl = document.querySelector('#board-refresh')
 
-const prizes = createDemoPrizes()
-// 10칸(4등4+3등3+2등2+1등1) 배치를 한 번 뽑아서 세션 내내 고정한다. 1등은 항상
-// 맨 왼쪽(발사 경로상 가장 도달하기 어려운 자리)에 박아두고, 나머지는 매번 새로고침할
-// 때마다 무작위로 섞인다.
-const slotSequence = buildSlotSequence(prizes)
-const slotBounds = getSlotBounds(slotSequence.length)
+const SLOT_COUNT = SLOT_COUNTS_BY_PRIZE_INDEX.reduce((total, count) => total + count, 0)
+let prizes = createDemoPrizes()
+// 1등 칸을 포함해 새 판마다 전체 배치를 다시 섞는다. 공이 이미 발사된 뒤에는
+// 그 회차의 판정이 끝날 때까지 현재 배치를 유지한다.
+function createRandomSlotSequence() {
+  return buildSlotSequence(prizes, undefined, 0, Math.floor(Math.random() * SLOT_COUNT))
+}
+
+let slotSequence = createRandomSlotSequence()
+const slotBounds = getSlotBounds(SLOT_COUNT)
 let slotLayout = buildSlotLayout(prizes, slotSequence)
 let ballInPlay = false
 let soldOut = false
@@ -84,6 +114,27 @@ const world = createPhysicsWorld({
 })
 world.applySlotLayout(slotLayout)
 renderPrizePanel()
+
+function setBoardRefreshEnabled(enabled) {
+  boardRefreshEl.disabled = !enabled
+}
+
+function refreshBoard() {
+  if (ballInPlay) return
+  clearTimeout(stuckBallTimer)
+  activeBall = null
+  prizes = createDemoPrizes()
+  slotSequence = createRandomSlotSequence()
+  slotLayout = buildSlotLayout(prizes, slotSequence)
+  soldOut = false
+  pullRatio = 0
+  world.applySlotLayout(slotLayout)
+  renderPrizePanel()
+  resultEl.textContent = '새 판을 준비했어요 · 1등 슬롯 위치가 바뀌었습니다'
+  resultEl.className = 'result-banner idle'
+}
+
+boardRefreshEl.addEventListener('click', refreshBoard)
 
 // ---- 플런저 드래그(포인터 이벤트) ----
 let dragPointerId = null
@@ -134,6 +185,7 @@ let stuckBallTimer = null
 
 function fireBall(pull) {
   ballInPlay = true
+  setBoardRefreshEnabled(false)
   resultEl.textContent = '공이 굴러가는 중...'
   resultEl.className = 'result-banner rolling'
   activeBall = world.launchBall(pull)
@@ -143,6 +195,7 @@ function fireBall(pull) {
     world.removeBall(activeBall)
     activeBall = null
     ballInPlay = false
+    setBoardRefreshEnabled(true)
     resultEl.textContent = '공이 자리를 못 잡았어요 - 다시 발사해주세요'
     resultEl.className = 'result-banner idle'
   }, STUCK_BALL_TIMEOUT_MS)
@@ -157,6 +210,7 @@ function handleLanding(slotIndex) {
     resultEl.textContent = '판정 불가 - 다시 발사해주세요'
     resultEl.className = 'result-banner idle'
     ballInPlay = false
+    setBoardRefreshEnabled(true)
     return
   }
 
@@ -177,6 +231,7 @@ function handleLanding(slotIndex) {
 
   setTimeout(() => {
     ballInPlay = false
+    setBoardRefreshEnabled(true)
   }, 500)
 }
 
@@ -184,8 +239,8 @@ function renderPrizePanel() {
   prizeListEl.innerHTML = status(prizes)
     .map(
       (s) => `
-        <li class="${s.remaining === 0 ? 'depleted' : ''}">
-          <span class="dot" style="background:${s.glow}"></span>
+        <li class="${s.remaining === 0 ? 'depleted' : ''}" style="--prize-glow:${s.glow}">
+          <span class="dot"></span>
           <span class="name">${s.name}</span>
           <span class="count">${s.remaining} / ${s.total}</span>
           <span class="prob">${s.probability}%</span>

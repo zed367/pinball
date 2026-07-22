@@ -43,6 +43,136 @@ body::before {
   padding: 28px;
 }
 
+.hero-banner {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: clamp(220px, 29vw, 348px);
+  align-items: flex-end;
+  margin-bottom: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.68);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 76% 44%, rgba(14, 165, 233, 0.31), transparent 22%),
+    linear-gradient(112deg, #020711 0%, #061d35 60%, #062949 100%);
+  box-shadow:
+    0 0 0 1px rgba(186, 230, 253, 0.12) inset,
+    0 0 32px rgba(14, 165, 233, 0.22),
+    0 20px 44px rgba(0, 0, 0, 0.35);
+}
+
+.hero-banner::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, rgba(1, 6, 16, 0.95) 0%, rgba(2, 7, 18, 0.72) 40%, rgba(2, 7, 18, 0.08) 75%);
+}
+
+.hero-banner__image {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-banner__art {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  overflow: hidden;
+}
+
+.hero-banner__image:not([hidden]) ~ .hero-banner__art {
+  opacity: 0;
+}
+
+.hero-banner__orb {
+  position: absolute;
+  display: block;
+  border: 1px solid rgba(186, 230, 253, 0.75);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #e0f7ff, #38bdf8 15%, rgba(14, 165, 233, 0.46) 32%, rgba(8, 47, 73, 0.1) 65%);
+  box-shadow: 0 0 20px #38bdf8, 0 0 65px rgba(14, 165, 233, 0.8), inset -22px -24px 34px rgba(2, 6, 23, 0.76);
+}
+
+.hero-banner__orb--large {
+  right: 8%;
+  bottom: -34%;
+  width: clamp(200px, 30vw, 370px);
+  aspect-ratio: 1;
+}
+
+.hero-banner__orb--small {
+  top: 20%;
+  right: 32%;
+  width: clamp(48px, 8vw, 100px);
+  aspect-ratio: 1;
+  opacity: 0.72;
+}
+
+.hero-banner__grid {
+  position: absolute;
+  right: -10%;
+  bottom: -38%;
+  width: 65%;
+  height: 100%;
+  transform: perspective(440px) rotateX(58deg) rotateZ(-8deg);
+  transform-origin: bottom;
+  background-image:
+    linear-gradient(rgba(125, 211, 252, 0.34) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.34) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(to bottom, transparent, black 38%);
+}
+
+.hero-banner__content {
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+  padding: clamp(26px, 4vw, 50px);
+}
+
+.hero-banner__eyebrow {
+  margin: 0 0 9px;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.hero-banner h1 {
+  margin: 0;
+  color: #f0fbff;
+  font-size: clamp(30px, 5vw, 58px);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-shadow: 0 0 26px rgba(56, 189, 248, 0.58);
+}
+
+.hero-banner__content > p:not(.hero-banner__eyebrow) {
+  margin: 16px 0 18px;
+  color: #b8dcea;
+  font-size: clamp(13px, 1.6vw, 16px);
+}
+
+.hero-banner__image-note {
+  display: inline-flex;
+  padding: 5px 9px;
+  border: 1px solid rgba(125, 211, 252, 0.56);
+  border-radius: 999px;
+  color: #bfeaff;
+  background: rgba(2, 20, 39, 0.58);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.17) inset;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
 .pinball-layout {
   display: flex;
   flex-wrap: wrap;
@@ -116,6 +246,57 @@ body::before {
   font-weight: 800;
   letter-spacing: 0.08em;
   vertical-align: middle;
+}
+
+.board-refresh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.55);
+  border-radius: 12px;
+  color: #e0f7ff;
+  background: linear-gradient(120deg, rgba(8, 47, 73, 0.9), rgba(4, 14, 28, 0.92));
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.16) inset;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  transition: 0.18s ease;
+}
+
+.board-refresh > span:first-child {
+  color: #38bdf8;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+}
+
+.board-refresh small {
+  display: block;
+  margin-top: 2px;
+  color: #7faec6;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.board-refresh:hover:not(:disabled) {
+  border-color: #7dd3fc;
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.42), 0 0 18px rgba(14, 165, 233, 0.22) inset;
+  transform: translateY(-1px);
+}
+
+.board-refresh:focus-visible {
+  outline: 2px solid #e0f7ff;
+  outline-offset: 3px;
+}
+
+.board-refresh:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
 }
 
 .hint {
@@ -196,7 +377,14 @@ body::before {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  box-shadow: 0 0 9px currentColor;
+  background: var(--prize-glow);
+  box-shadow: 0 0 9px var(--prize-glow), 0 0 2px var(--prize-glow);
+}
+
+.prize-panel .name,
+.prize-panel .prob {
+  color: var(--prize-glow);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--prize-glow) 42%, transparent);
 }
 
 .prize-panel .count {
@@ -206,7 +394,6 @@ body::before {
 
 .prize-panel .prob {
   min-width: 42px;
-  color: #7dd3fc;
   font-weight: 700;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -219,6 +406,29 @@ body::before {
 
   .pinball-layout {
     gap: 20px;
+  }
+
+  .hero-banner {
+    min-height: 258px;
+    margin-bottom: 20px;
+    border-radius: 18px;
+  }
+
+  .hero-banner::after {
+    background: linear-gradient(90deg, rgba(1, 6, 16, 0.92), rgba(2, 7, 18, 0.64));
+  }
+
+  .hero-banner__content {
+    padding: 26px;
+  }
+
+  .hero-banner__orb--large {
+    right: -9%;
+    bottom: -17%;
+  }
+
+  .hero-banner__orb--small {
+    right: 41%;
   }
 
   .board-panel {
