@@ -116,11 +116,14 @@ let ballInPlay = false
 let soldOut = false
 let selectedDrawCount = 1
 let queuedBallCount = selectedDrawCount
+let retryBallCount = 0
 let remainingLaunches = 0
 let batchResults = []
+let missedBallCount = 0
 let pullRatio = 0
 let batchFinishTimer = null
 const activeBalls = new Map()
+const jackpotEffects = []
 
 const world = createPhysicsWorld({
   slotSequence,
@@ -138,7 +141,16 @@ function getRemainingInventory() {
   return prizes.reduce((sum, prize) => sum + prize.remaining, 0)
 }
 
+function getReadyDrawCount() {
+  return retryBallCount > 0 ? retryBallCount : selectedDrawCount
+}
+
 function selectAvailableDrawCount() {
+  if (retryBallCount > 0) {
+    queuedBallCount = retryBallCount
+    return
+  }
+
   const remaining = getRemainingInventory()
   if (remaining === 0) {
     selectedDrawCount = 1
@@ -162,7 +174,8 @@ function updateDrawControls() {
   drawCountButtons.forEach((button) => {
     const count = Number(button.dataset.drawCount)
     const selected = count === selectedDrawCount
-    button.disabled = ballInPlay || count > remaining
+    // 놓친 공이 쌓여 있으면 먼저 그 공들만 다시 쏘게 한다.
+    button.disabled = ballInPlay || retryBallCount > 0 || count > remaining
     button.classList.toggle('is-selected', selected)
     button.setAttribute('aria-pressed', String(selected))
   })
@@ -179,6 +192,8 @@ function refreshBoard() {
   soldOut = false
   pullRatio = 0
   batchResults = []
+  missedBallCount = 0
+  retryBallCount = 0
   remainingLaunches = 0
   slotBounds = world.updateSlotSequence(slotSequence, slotLayout)
   renderPrizePanel()
@@ -213,7 +228,7 @@ function canvasPoint(evt) {
 }
 
 canvas.addEventListener('pointerdown', (evt) => {
-  if (ballInPlay || soldOut || selectedDrawCount > getRemainingInventory()) return
+  if (ballInPlay || soldOut || getReadyDrawCount() > getRemainingInventory()) return
   const { x, y } = canvasPoint(evt)
   if (!laneHit(x, y)) return
   dragPointerId = evt.pointerId
@@ -239,13 +254,16 @@ canvas.addEventListener('pointerup', releasePlunger)
 canvas.addEventListener('pointercancel', releasePlunger)
 
 function startDraw() {
-  if (ballInPlay || soldOut || selectedDrawCount > getRemainingInventory()) return
+  const drawCount = getReadyDrawCount()
+  if (ballInPlay || soldOut || drawCount > getRemainingInventory()) return
 
   ballInPlay = true
-  remainingLaunches = selectedDrawCount
+  remainingLaunches = drawCount
   batchResults = []
+  missedBallCount = 0
+  retryBallCount = 0
   setBoardRefreshEnabled(false)
-  resultEl.textContent = `${selectedDrawCount}개 공이 동시에 굴러가는 중...`
+  resultEl.textContent = `${drawCount}개 공이 동시에 굴러가는 중...`
   resultEl.className = 'result-banner rolling'
 
   // 하나씩 시간차로 쏘지 않고, 플런저를 놓는 순간 쌓여 있던 모든 공을 같은 프레임에 올려보낸다.
@@ -263,7 +281,7 @@ function handleLanding(slotIndex, ball) {
   activeBalls.delete(ball)
   const prize = resolveLanding(slotLayout, prizes, slotIndex)
   if (!prize) {
-    batchResults.push('판정 불가')
+    registerMiss('판정 불가')
     resultEl.textContent = `${batchResults.length}개 공 판정 완료 · 마감 칸에 도착한 공이 있어요`
     resultEl.className = 'result-banner rolling'
     finishBatchIfReady()
@@ -275,11 +293,21 @@ function handleLanding(slotIndex, ball) {
   resultEl.style.setProperty('--glow', prize.glow)
   resultEl.className = 'result-banner win'
 
+  if (prize.grade === 1) {
+    triggerJackpotEffect(slotIndex)
+    resultEl.classList.add('jackpot')
+  }
+
   slotLayout = buildSlotLayout(prizes, slotSequence)
   world.applySlotLayout(slotLayout)
   renderPrizePanel()
 
   finishBatchIfReady()
+}
+
+function registerMiss(reason) {
+  batchResults.push(reason)
+  missedBallCount += 1
 }
 
 function formatBatchResults() {
@@ -305,7 +333,12 @@ function finishBatchIfReady() {
 
 function completeBatch() {
   ballInPlay = false
-  soldOut = getRemainingInventory() <= 0
+  const remainingInventory = getRemainingInventory()
+  soldOut = remainingInventory <= 0
+  // 놓친 공은 재고를 소진하지 않았으므로, 남은 경품이 있을 때 같은 수만큼 레인에
+  // 자동으로 되돌려 쌓아 다음 플런저 조작으로 재도전할 수 있게 한다.
+  retryBallCount = soldOut ? 0 : Math.min(missedBallCount, remainingInventory)
+  queuedBallCount = retryBallCount
   setBoardRefreshEnabled(true)
   updateDrawControls()
 
@@ -315,7 +348,8 @@ function completeBatch() {
     return
   }
 
-  resultEl.textContent = `${batchResults.length}연 완료 · ${formatBatchResults() || '판정 불가'}`
+  const retryMessage = retryBallCount > 0 ? ` · 놓친 ${retryBallCount}개 재발사 대기` : ''
+  resultEl.textContent = `${batchResults.length}연 완료 · ${formatBatchResults() || '판정 불가'}${retryMessage}`
   resultEl.className = 'result-banner win'
 }
 
@@ -337,7 +371,7 @@ function monitorStuckBalls(now) {
 
     world.removeBall(ball)
     activeBalls.delete(ball)
-    batchResults.push('끼임')
+    registerMiss('끼임')
     resultEl.textContent = `${batchResults.length}개 공 판정 완료 · 2초 이상 멈춘 공을 정리했어요`
     resultEl.className = 'result-banner rolling'
   }
@@ -551,6 +585,67 @@ function drawPlunger() {
   }
 }
 
+function triggerJackpotEffect(slotIndex) {
+  const origin = {
+    x: slotBounds[slotIndex]?.center ?? BOARD_WIDTH / 2,
+    y: SLOT_TOP + 42,
+  }
+  const particles = Array.from({ length: 56 }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / 56 + (Math.random() - 0.5) * 0.22
+    return {
+      angle,
+      speed: 115 + Math.random() * 215,
+      size: 2 + Math.random() * 3.5,
+      hue: Math.random() > 0.26 ? '#fde047' : '#fff7b2',
+    }
+  })
+  jackpotEffects.push({ startedAt: performance.now(), origin, particles })
+}
+
+function drawJackpotEffects(now) {
+  for (let index = jackpotEffects.length - 1; index >= 0; index -= 1) {
+    const effect = jackpotEffects[index]
+    const progress = (now - effect.startedAt) / 1800
+    if (progress >= 1) {
+      jackpotEffects.splice(index, 1)
+      continue
+    }
+
+    const fade = 1 - progress
+    const { x, y } = effect.origin
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
+
+    // 보드를 순간적으로 금빛으로 번쩍이게 해 1등의 무게감을 만든다.
+    ctx.fillStyle = `rgba(253, 224, 71, ${0.13 * fade})`
+    ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
+
+    for (let ring = 0; ring < 3; ring += 1) {
+      const ringProgress = Math.max(0, Math.min(1, progress * 1.8 - ring * 0.18))
+      ctx.beginPath()
+      ctx.arc(x, y, 18 + ringProgress * (105 + ring * 34), 0, Math.PI * 2)
+      ctx.lineWidth = 2.5 - ring * 0.45
+      ctx.strokeStyle = `rgba(254, 240, 138, ${(1 - ringProgress) * fade * 0.82})`
+      ctx.shadowColor = '#fde047'
+      ctx.shadowBlur = 16
+      ctx.stroke()
+    }
+
+    effect.particles.forEach((particle) => {
+      const travel = particle.speed * progress
+      const particleX = x + Math.cos(particle.angle) * travel
+      const particleY = y + Math.sin(particle.angle) * travel + 220 * progress * progress
+      ctx.fillStyle = particle.hue
+      ctx.globalAlpha = fade
+      ctx.shadowColor = '#fde047'
+      ctx.shadowBlur = 12
+      ctx.fillRect(particleX - particle.size / 2, particleY - particle.size / 2, particle.size, particle.size)
+    })
+
+    ctx.restore()
+  }
+}
+
 function loop(now) {
   monitorStuckBalls(now)
 
@@ -586,6 +681,7 @@ function loop(now) {
 
   drawSlots()
   drawPlunger()
+  drawJackpotEffects(now)
 
   requestAnimationFrame(loop)
 }
