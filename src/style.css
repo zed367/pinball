@@ -1,0 +1,233 @@
+:root {
+  color-scheme: dark;
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', system-ui, sans-serif;
+  background: #02040a;
+  color: #e8f7ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(14, 165, 233, 0.16), transparent 26rem),
+    radial-gradient(circle at 87% 82%, rgba(2, 132, 199, 0.13), transparent 24rem),
+    #02040a;
+}
+
+body::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  content: '';
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.055) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse at center, black, transparent 78%);
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1280px;
+  padding: 28px;
+}
+
+.pinball-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.board-panel {
+  position: relative;
+  flex: 1 1 640px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.86);
+  border-radius: 24px;
+  background: linear-gradient(135deg, #0a2a46 0%, #061323 46%, #081d33 100%);
+  box-shadow:
+    0 0 0 1px rgba(186, 230, 253, 0.18) inset,
+    0 0 20px rgba(14, 165, 233, 0.35),
+    0 0 58px rgba(2, 132, 199, 0.25),
+    0 22px 48px rgba(0, 0, 0, 0.55);
+}
+
+.board-panel::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.18), transparent 18%, transparent 78%, rgba(56, 189, 248, 0.13));
+}
+
+#board {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  border-radius: 15px;
+  box-shadow: 0 0 22px rgba(14, 165, 233, 0.18) inset;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.side-panel {
+  flex: 0 0 310px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.side-panel h1 {
+  margin: 0;
+  color: #e0f7ff;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-shadow: 0 0 16px rgba(56, 189, 248, 0.65);
+}
+
+.side-panel .tag {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 3px 8px;
+  border: 1px solid rgba(56, 189, 248, 0.7);
+  border-radius: 999px;
+  color: #7dd3fc;
+  background: rgba(8, 47, 73, 0.7);
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.24) inset;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  vertical-align: middle;
+}
+
+.hint {
+  margin: 0;
+  color: #9bc6db;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.result-banner {
+  --glow: #38bdf8;
+  padding: 16px;
+  border: 1px dashed rgba(125, 211, 252, 0.55);
+  border-radius: 14px;
+  color: #b9e9ff;
+  background: linear-gradient(140deg, rgba(8, 31, 53, 0.92), rgba(4, 11, 23, 0.92));
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.08) inset;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 750;
+  transition: 0.2s ease;
+}
+
+.result-banner.rolling {
+  border-color: #38bdf8;
+  color: #e0f7ff;
+  background: linear-gradient(120deg, #06233d, #071225);
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.42), 0 0 22px rgba(14, 165, 233, 0.2) inset;
+}
+
+.result-banner.win {
+  border-color: var(--glow);
+  color: #f0fbff;
+  background: linear-gradient(120deg, rgba(8, 47, 73, 0.98), rgba(5, 18, 35, 0.98));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--glow) 54%, transparent), 0 0 20px color-mix(in srgb, var(--glow) 20%, transparent) inset;
+}
+
+.prize-panel {
+  padding: 15px 16px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(7, 22, 40, 0.96), rgba(3, 9, 19, 0.96));
+  box-shadow: 0 0 24px rgba(2, 132, 199, 0.09) inset, 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.prize-panel h2 {
+  margin: 0 0 11px;
+  color: #d5f3ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.prize-panel ul {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prize-panel li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  color: #c9e9f7;
+  font-size: 13px;
+}
+
+.prize-panel li.depleted {
+  opacity: 0.36;
+  text-decoration: line-through;
+}
+
+.prize-panel .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 9px currentColor;
+}
+
+.prize-panel .count {
+  color: #7198ad;
+  font-variant-numeric: tabular-nums;
+}
+
+.prize-panel .prob {
+  min-width: 42px;
+  color: #7dd3fc;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  #app {
+    padding: 16px;
+  }
+
+  .pinball-layout {
+    gap: 20px;
+  }
+
+  .board-panel {
+    flex-basis: 100%;
+    padding: 7px;
+    border-radius: 18px;
+  }
+
+  .side-panel {
+    flex-basis: 100%;
+  }
+}
