@@ -303,10 +303,11 @@ export function createPhysicsWorld({ slotSequence, onLanding }) {
     return bounds
   }
 
-  // startY를 지정하면 레인에 쌓여 있던 여러 공을 간격만 다르게 하여 같은 프레임에
-  // 발사할 수 있다. x축 미세 편차는 같은 순간에 쏴도 각 공의 궤적이 갈리게 한다.
-  function launchBall(pullRatio = 1, { startY = LAUNCH_Y } = {}) {
-    const ball = Matter.Bodies.circle(LAUNCH_X, startY, BALL_RADIUS, {
+  // startY와 startXOffset을 지정하면 레인에 쌓여 있던 여러 공을 겹치지 않게 같은
+  // 프레임에 발사할 수 있다. 다연차의 horizontalVelocity는 좌우 레일을 고르게
+  // 타도록 main.js가 분산해 주며, 1연은 기존의 작은 랜덤 편차를 그대로 쓴다.
+  function launchBall(pullRatio = 1, { startY = LAUNCH_Y, startXOffset = 0, horizontalVelocity = null } = {}) {
+    const ball = Matter.Bodies.circle(LAUNCH_X + startXOffset, startY, BALL_RADIUS, {
       restitution: 0.45,
       friction: 0.02,
       frictionAir: 0.0006,
@@ -315,7 +316,8 @@ export function createPhysicsWorld({ slotSequence, onLanding }) {
     Matter.Composite.add(world, ball)
     const clampedPull = Math.max(0, Math.min(1, pullRatio))
     const speed = MIN_LAUNCH_SPEED + clampedPull * (MAX_LAUNCH_SPEED - MIN_LAUNCH_SPEED)
-    Matter.Body.setVelocity(ball, { x: (Math.random() - 0.5) * 1.6, y: -speed })
+    const velocityX = horizontalVelocity ?? (Math.random() - 0.5) * 1.6
+    Matter.Body.setVelocity(ball, { x: velocityX, y: -speed })
     return ball
   }
 

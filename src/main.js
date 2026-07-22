@@ -33,6 +33,11 @@ const KNOB_REST_Y = BOARD_HEIGHT - 24
 const MAX_PULL_PX = 20
 const MIN_PULL_RATIO_TO_FIRE = 0.15
 const QUEUE_BALL_GAP = BALL_RADIUS * 2 + 4
+// 다연차 공은 같은 순간에 나가더라도 각자 다른 레일을 먼저 타도록 좌우 힘을
+// 넓게 분산한다. 1연은 기존 감각을 그대로 유지한다.
+const BATCH_LAUNCH_X_OFFSET = 4
+const BATCH_LAUNCH_X_SPEED = 6
+const BATCH_LAUNCH_JITTER = 1.6
 // 발사 시간과 무관하게, 실제 속도가 이 값 아래인 상태가 2초 이어질 때만
 // 공이 끼었거나 멈춘 것으로 보고 회차를 정리한다.
 const STUCK_SPEED_THRESHOLD = 0.08
@@ -267,14 +272,30 @@ function startDraw() {
   resultEl.className = 'result-banner rolling'
 
   // 하나씩 시간차로 쏘지 않고, 플런저를 놓는 순간 쌓여 있던 모든 공을 같은 프레임에 올려보낸다.
-  // 시작 y만 다르게 둬서 공끼리 겹치지 않으며, 모두 같은 순간에 속도를 받는다.
+  // 다연차는 시작 위치와 좌우 힘을 -1~1 범위로 분산해 한쪽 바깥 레일만 계속
+  // 타지 않게 한다. 이 분산은 못밭 진입 전의 물리 궤적만 바꾸며 등수는 정하지 않는다.
   for (let index = 0; index < remainingLaunches; index += 1) {
-    const ball = world.launchBall(1, { startY: LAUNCH_Y - index * QUEUE_BALL_GAP })
+    const ball = world.launchBall(1, {
+      startY: LAUNCH_Y - index * QUEUE_BALL_GAP,
+      ...getBatchLaunchProfile(index, remainingLaunches),
+    })
     activeBalls.set(ball, { stationarySince: null })
   }
   queuedBallCount = 0
   remainingLaunches = 0
   updateDrawControls()
+}
+
+function getBatchLaunchProfile(index, total) {
+  if (total === 1) return {}
+
+  // 첫 공부터 마지막 공까지 안쪽 레일 방향(-)과 바깥 레일 방향(+)을 고르게
+  // 배분한다. 작은 랜덤값도 더해 같은 연차에서도 완전히 같은 줄을 타지 않게 한다.
+  const spread = (index / (total - 1)) * 2 - 1
+  return {
+    startXOffset: spread * BATCH_LAUNCH_X_OFFSET,
+    horizontalVelocity: spread * BATCH_LAUNCH_X_SPEED + (Math.random() - 0.5) * BATCH_LAUNCH_JITTER,
+  }
 }
 
 function handleLanding(slotIndex, ball) {
