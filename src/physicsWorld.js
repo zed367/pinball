@@ -26,8 +26,9 @@ export const BALL_RADIUS = 9
 export const SLOT_TOP = 420
 export const SLOT_FLOOR = 520
 const SLOT_SENSOR_Y = 502
-// 등수별 물리 슬롯 폭 비율. 1등이 가장 좁고 4등이 가장 넓다.
-const SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX = [1, 2, 3, 4]
+// 1~3등은 체감 난이도를 위해 고정 폭을 쓴다. 남은 폭은 4등 슬롯에 균등 배분해
+// 필드를 항상 끝까지 채우고, 4등이 가장 넓은 칸이 되도록 한다.
+const SLOT_WIDTHS_BY_PRIZE_INDEX = [50, 75, 88, null]
 
 // 이 높이(y) 위로는 레인이 곡선으로 꺾여 필드 쪽으로 이어진다.
 export const LANE_CURVE_Y = 170
@@ -174,21 +175,23 @@ function makePegs() {
   return pegs
 }
 
-// 등수 배열(slotSequence)을 받아 칸별 폭을 계산한다. 각 슬롯은 등수에 따라
-// 1등 1단위, 2등 2단위, 3등 3단위, 4등 4단위 폭을 갖는다. 새로고침으로
+// 등수 배열(slotSequence)을 받아 칸별 폭을 계산한다. 1등 50px, 2등 75px,
+// 3등 88px을 먼저 배정하고 남은 폭을 4등 칸에 균등 배분한다. 새로고침으로
 // 등수의 순서가 바뀌어도 해당 등수의 실제 폭과 충돌 영역이 함께 이동한다.
 export function getSlotBounds(slotSequence) {
-  const totalWeight = slotSequence.reduce(
-    (sum, prizeIndex) => sum + (SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX[prizeIndex] ?? 1),
+  const flexiblePrizeIndex = SLOT_WIDTHS_BY_PRIZE_INDEX.length - 1
+  const flexibleSlotCount = slotSequence.filter((prizeIndex) => prizeIndex === flexiblePrizeIndex).length
+  const fixedWidthTotal = slotSequence.reduce(
+    (sum, prizeIndex) => sum + (SLOT_WIDTHS_BY_PRIZE_INDEX[prizeIndex] ?? 0),
     0
   )
-  const unitWidth = (FIELD_RIGHT - FIELD_LEFT) / totalWeight
+  const flexibleSlotWidth = (FIELD_RIGHT - FIELD_LEFT - fixedWidthTotal) / flexibleSlotCount
   let x = FIELD_LEFT
 
   return slotSequence.map((prizeIndex, index) => {
-    const weight = SLOT_WIDTH_WEIGHTS_BY_PRIZE_INDEX[prizeIndex] ?? 1
+    const fixedWidth = SLOT_WIDTHS_BY_PRIZE_INDEX[prizeIndex]
     // 부동소수점 오차가 마지막 칸에 남지 않도록 끝 칸은 필드 우측에 정확히 맞춘다.
-    const width = index === slotSequence.length - 1 ? FIELD_RIGHT - x : unitWidth * weight
+    const width = index === slotSequence.length - 1 ? FIELD_RIGHT - x : fixedWidth ?? flexibleSlotWidth
     const bound = { x, width, center: x + width / 2 }
     x += width
     return bound
