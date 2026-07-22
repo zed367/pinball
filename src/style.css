@@ -407,6 +407,83 @@ body::before {
   font-variant-numeric: tabular-nums;
 }
 
+/* Galaxy Tab S6 Lite 등 900~1366px 가로형 태블릿: 약 1280×800 뷰포트를 기준으로
+   보드와 정보 패널, 짧은 배너가 한 화면 안에서 균형을 이루도록 밀도를 조정한다. */
+@media (min-width: 900px) and (max-width: 1366px) and (orientation: landscape) {
+  body {
+    align-items: flex-start;
+  }
+
+  #app {
+    max-width: 1366px;
+    padding: 18px 22px 22px;
+  }
+
+  .hero-banner {
+    min-height: 0;
+    height: clamp(172px, 16vw, 208px);
+    margin-bottom: 18px;
+    border-radius: 18px;
+  }
+
+  .pinball-layout {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .board-panel {
+    min-width: 0;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  #board {
+    border-radius: 11px;
+  }
+
+  .side-panel {
+    flex-basis: 300px;
+    gap: 10px;
+  }
+
+  .side-panel h1 {
+    font-size: 19px;
+  }
+
+  .side-panel .tag {
+    padding: 2px 6px;
+    font-size: 9px;
+  }
+
+  .board-refresh {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .board-refresh > span:first-child {
+    font-size: 21px;
+  }
+
+  .hint {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .result-banner {
+    padding: 12px;
+    font-size: 15px;
+  }
+
+  .prize-panel {
+    padding: 12px 14px;
+  }
+
+  .prize-panel ul {
+    gap: 7px;
+  }
+}
+
 @media (max-width: 720px) {
   #app {
     padding: 16px;
