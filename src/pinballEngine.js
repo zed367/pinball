@@ -29,8 +29,9 @@ export function createDemoPrizes() {
 // 적게 줘서 실제로 맞히기 어렵게 만든다. prizes 배열 순서([1등,2등,3등,4등])에 맞춘다.
 export const SLOT_COUNTS_BY_PRIZE_INDEX = [1, 2, 3, 4]
 
-// 칸 배치를 만든다. 가장 희귀한 등수는 `hardestSlotIndex`로 지정한 위치에 넣고,
-// 나머지 등수는 무작위로 섞는다. 위치를 생략하면 기존처럼 마지막 칸에 배치한다.
+// 칸 배치를 만든다. 1등은 양 끝 슬롯을 피하고 2등과도 붙지 않게 배치한다.
+// 그래서 1등이 너무 눈에 띄는 가장자리나 2등과 묶여 보이는 자리에 나오지 않는다.
+// 나머지 등수는 무작위로 섞는다.
 export function buildSlotSequence(
   prizes,
   slotCounts = SLOT_COUNTS_BY_PRIZE_INDEX,
@@ -46,8 +47,26 @@ export function buildSlotSequence(
     const j = Math.floor(Math.random() * (i + 1))
     ;[rest[i], rest[j]] = [rest[j], rest[i]]
   }
-  const targetIndex =
-    hardestSlotIndex === null ? rest.length : Math.max(0, Math.min(rest.length, Math.floor(hardestSlotIndex)))
+
+  const totalSlots = rest.length + 1
+  const preferredIndex =
+    hardestSlotIndex === null ? null : Math.max(0, Math.min(rest.length, Math.floor(hardestSlotIndex)))
+  const secondPrizeIndex = hardestPrizeIndex === 0 ? 1 : null
+  const validIndexes = Array.from({ length: totalSlots }, (_, index) => index).filter((index) => {
+    // 1등은 첫·마지막 슬롯에 두지 않는다.
+    if (index === 0 || index === totalSlots - 1) return false
+    // 삽입 전 rest에서 index-1은 왼쪽 이웃, index는 오른쪽 이웃이 된다.
+    if (secondPrizeIndex === null) return true
+    return rest[index - 1] !== secondPrizeIndex && rest[index] !== secondPrizeIndex
+  })
+
+  // 현재 데모 구성에서는 항상 가능하다. 커스텀 구성에서도 배치가 깨지지 않도록
+  // 혹시 후보가 없으면 가장자리만 피하는 위치를 최후의 안전장치로 쓴다.
+  const fallbackIndexes = Array.from({ length: totalSlots - 2 }, (_, index) => index + 1)
+  const candidates = validIndexes.length > 0 ? validIndexes : fallbackIndexes
+  const targetIndex = candidates.includes(preferredIndex)
+    ? preferredIndex
+    : candidates[Math.floor(Math.random() * candidates.length)]
   rest.splice(targetIndex, 0, hardestPrizeIndex)
   return rest
 }

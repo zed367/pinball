@@ -23,15 +23,15 @@ import {
   SLOT_COUNTS_BY_PRIZE_INDEX,
 } from './pinballEngine.js'
 
-// 스프링 모양은 고정하고, 연차 발사 때만 손잡이를 짧게 눌렀다 복귀시킨다.
+// 스프링 모양은 고정하고, 사용자가 플런저를 당기는 동안 손잡이만 아래로 움직인다.
 // 대기 공은 레인 안에 지름보다 넓은 간격으로 쌓아, 5연/10연도 서로 겹쳐 보이지
-// 않게 한다. 발사 버튼을 누르면 이 공들을 같은 프레임에 모두 쏜다.
+// 않게 한다. 플런저를 놓으면 이 공들을 같은 프레임에 모두 쏜다.
 const TUBE_TOP = LAUNCH_Y + 20
 const TUBE_HEIGHT = 14
 const MAX_COIL_LEN = 14
 const KNOB_REST_Y = BOARD_HEIGHT - 24
-const PLUNGER_PRESS_PX = 16
-const PLUNGER_PRESS_DURATION_MS = 110
+const MAX_PULL_PX = 20
+const MIN_PULL_RATIO_TO_FIRE = 0.15
 const QUEUE_BALL_GAP = BALL_RADIUS * 2 + 4
 // 발사 시간과 무관하게, 실제 속도가 이 값 아래인 상태가 2초 이어질 때만
 // 공이 끼었거나 멈춘 것으로 보고 회차를 정리한다.
@@ -71,23 +71,19 @@ app.innerHTML = `
       <canvas id="board" width="${BOARD_WIDTH}" height="${BOARD_HEIGHT}"></canvas>
     </div>
     <div class="side-panel">
-      <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · AUTO DRAW</span></h1>
+      <h1>핀볼 쿠지 <span class="tag">NEON ARCADE · PULL &amp; RELEASE</span></h1>
       <button id="board-refresh" class="board-refresh" type="button">
         <span aria-hidden="true">↻</span>
         <span>판 새로고침 <small>1등 슬롯 다시 섞기</small></span>
       </button>
-      <div class="draw-control" aria-label="연차 선택과 발사">
+      <div class="draw-control" aria-label="연차 선택">
         <div class="draw-counts" role="group" aria-label="연차 선택">
           <button class="draw-count is-selected" type="button" data-draw-count="1" aria-pressed="true">1연</button>
           <button class="draw-count" type="button" data-draw-count="5" aria-pressed="false">5연</button>
           <button class="draw-count" type="button" data-draw-count="10" aria-pressed="false">10연</button>
         </div>
-        <button id="launch-button" class="launch-button" type="button">
-          <span id="launch-label">1연 발사</span>
-          <small id="launch-detail">공 1개를 발사합니다</small>
-        </button>
       </div>
-      <p class="hint">5연·10연은 레인에 쌓인 공이 버튼 한 번에 모두 발사됩니다.<br />어느 칸에 들어갈지는 못을 튕기며 정해져 결과를 고를 수 없어요.</p>
+      <p class="hint">연차를 고른 뒤 오른쪽 플런저를 아래로 당겼다 놓으세요.<br />5연·10연은 레인에 쌓인 공이 한 번에 모두 발사됩니다.</p>
       <div id="result" class="result-banner idle">공을 발사해보세요</div>
       <div class="prize-panel">
         <h2>재고 현황</h2>
@@ -103,9 +99,6 @@ const resultEl = document.querySelector('#result')
 const prizeListEl = document.querySelector('#prize-list')
 const boardRefreshEl = document.querySelector('#board-refresh')
 const drawCountButtons = [...document.querySelectorAll('[data-draw-count]')]
-const launchButton = document.querySelector('#launch-button')
-const launchLabel = document.querySelector('#launch-label')
-const launchDetail = document.querySelector('#launch-detail')
 
 const SLOT_COUNT = SLOT_COUNTS_BY_PRIZE_INDEX.reduce((total, count) => total + count, 0)
 const DRAW_COUNTS = [1, 5, 10]
@@ -126,7 +119,6 @@ let queuedBallCount = selectedDrawCount
 let remainingLaunches = 0
 let batchResults = []
 let pullRatio = 0
-let plungerReleaseTimer = null
 let batchFinishTimer = null
 const activeBalls = new Map()
 
@@ -175,19 +167,10 @@ function updateDrawControls() {
     button.setAttribute('aria-pressed', String(selected))
   })
 
-  const canLaunch = !ballInPlay && remaining >= selectedDrawCount && selectedDrawCount > 0
-  launchButton.disabled = !canLaunch
-  launchLabel.textContent = `${selectedDrawCount}연 ${selectedDrawCount === 1 ? '발사' : '동시 발사'}`
-  launchDetail.textContent = canLaunch
-    ? `공 ${selectedDrawCount}개를 한 번에 발사합니다`
-    : remaining === 0
-      ? '모든 재고가 소진되었습니다'
-      : '현재 발사가 진행 중입니다'
 }
 
 function refreshBoard() {
   if (ballInPlay) return
-  clearTimeout(plungerReleaseTimer)
   clearTimeout(batchFinishTimer)
   activeBalls.clear()
   prizes = createDemoPrizes()
@@ -215,15 +198,45 @@ drawCountButtons.forEach((button) => {
   })
 })
 
-launchButton.addEventListener('click', startDraw)
+let dragPointerId = null
+let dragStartY = 0
 
-function pressPlunger() {
-  clearTimeout(plungerReleaseTimer)
-  pullRatio = 1
-  plungerReleaseTimer = setTimeout(() => {
-    pullRatio = 0
-  }, PLUNGER_PRESS_DURATION_MS)
+function laneHit(x, y) {
+  return x >= LANE_LEFT && x <= LANE_RIGHT && y >= BOARD_HEIGHT - 220
 }
+
+function canvasPoint(evt) {
+  const rect = canvas.getBoundingClientRect()
+  const scaleX = BOARD_WIDTH / rect.width
+  const scaleY = BOARD_HEIGHT / rect.height
+  return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY }
+}
+
+canvas.addEventListener('pointerdown', (evt) => {
+  if (ballInPlay || soldOut || selectedDrawCount > getRemainingInventory()) return
+  const { x, y } = canvasPoint(evt)
+  if (!laneHit(x, y)) return
+  dragPointerId = evt.pointerId
+  dragStartY = y
+  canvas.setPointerCapture(evt.pointerId)
+})
+
+canvas.addEventListener('pointermove', (evt) => {
+  if (dragPointerId !== evt.pointerId) return
+  const { y } = canvasPoint(evt)
+  const pulled = Math.max(0, Math.min(MAX_PULL_PX, y - dragStartY))
+  pullRatio = pulled / MAX_PULL_PX
+})
+
+function releasePlunger(evt) {
+  if (dragPointerId !== evt.pointerId) return
+  dragPointerId = null
+  if (pullRatio >= MIN_PULL_RATIO_TO_FIRE) startDraw()
+  pullRatio = 0
+}
+
+canvas.addEventListener('pointerup', releasePlunger)
+canvas.addEventListener('pointercancel', releasePlunger)
 
 function startDraw() {
   if (ballInPlay || soldOut || selectedDrawCount > getRemainingInventory()) return
@@ -234,9 +247,8 @@ function startDraw() {
   setBoardRefreshEnabled(false)
   resultEl.textContent = `${selectedDrawCount}개 공이 동시에 굴러가는 중...`
   resultEl.className = 'result-banner rolling'
-  pressPlunger()
 
-  // 하나씩 시간차로 쏘지 않고, 쌓여 있던 모든 공을 같은 프레임에 올려보낸다.
+  // 하나씩 시간차로 쏘지 않고, 플런저를 놓는 순간 쌓여 있던 모든 공을 같은 프레임에 올려보낸다.
   // 시작 y만 다르게 둬서 공끼리 겹치지 않으며, 모두 같은 순간에 속도를 받는다.
   for (let index = 0; index < remainingLaunches; index += 1) {
     const ball = world.launchBall(1, { startY: LAUNCH_Y - index * QUEUE_BALL_GAP })
@@ -457,8 +469,8 @@ function drawSlots() {
 
 function drawPlunger() {
   const laneX = (LANE_LEFT + LANE_RIGHT) / 2
-  // 자동 발사 때만 손잡이가 짧게 눌린다.
-  const pistonY = KNOB_REST_Y + pullRatio * PLUNGER_PRESS_PX
+  // 사용자가 당기는 동안만 손잡이가 아래로 내려간다.
+  const pistonY = KNOB_REST_Y + pullRatio * MAX_PULL_PX
 
   // 스프링을 담은 통(고정, 안 움직임)
   ctx.fillStyle = '#0b2d49'

@@ -16,9 +16,11 @@ const WALL = 20
 export const FIELD_LEFT = 20
 // 필드-레인 사이 틈이 WALL 두께와 똑같아지도록 LANE_LEFT에 딱 붙여뒀다.
 // (전에는 틈이 40px라 그걸 메우는 벽이 다른 벽(20px)보다 두 배 두꺼워 보였음)
-export const FIELD_RIGHT = 840
-export const LANE_LEFT = 860
-export const LANE_RIGHT = 920
+export const FIELD_RIGHT = 875
+// 발사대는 보드 우측 테두리에 최대한 붙이고, 필드와의 사이는 기존처럼 20px 벽으로
+// 유지한다. 그래서 레인이 더 오른쪽으로 가도 마지막 슬롯 옆으로 공이 새지 않는다.
+export const LANE_LEFT = 895
+export const LANE_RIGHT = 945
 
 export const PEG_RADIUS = 7
 export const BALL_RADIUS = 9
@@ -30,8 +32,10 @@ const SLOT_SENSOR_Y = 502
 // 필드를 항상 끝까지 채우고, 4등이 가장 넓은 칸이 되도록 한다.
 const SLOT_WIDTHS_BY_PRIZE_INDEX = [50, 75, 88, null]
 
-// 이 높이(y) 위로는 레인이 곡선으로 꺾여 필드 쪽으로 이어진다.
-export const LANE_CURVE_Y = 170
+// 이 높이(y) 위로는 레인이 넓은 곡선으로 꺾여 필드 쪽으로 이어진다.
+export const LANE_CURVE_Y = 196
+const LANE_CURVE_TOP_Y = 18
+const LANE_CURVE_EXIT_X = 650
 
 // 발사 속도: 당김 비율(0~1)에 비례해서 정해진다 - 살짝 당기면 약하게, 최대로
 // 당기면 세게 나가서 "당기는 느낌"이 눈에 보이게 했다. 다만 어느 칸에 들어가는지는
@@ -129,7 +133,13 @@ function quadraticBezierPoints(p0, control, p1, steps = 16) {
 export function getLaneTubePoints() {
   const outer = [
     { x: LANE_RIGHT, y: BOARD_HEIGHT },
-    ...quadraticBezierPoints({ x: LANE_RIGHT, y: LANE_CURVE_Y }, { x: LANE_RIGHT, y: 34 }, { x: 700, y: 34 }),
+    // 시작점을 조금 더 아래로, 출구를 보드 상단 가까이·왼쪽으로 옮겨서 이전보다
+    // 반경이 큰 완만한 90도 곡선으로 만들었다.
+    ...quadraticBezierPoints(
+      { x: LANE_RIGHT, y: LANE_CURVE_Y },
+      { x: LANE_RIGHT, y: LANE_CURVE_TOP_Y },
+      { x: LANE_CURVE_EXIT_X, y: LANE_CURVE_TOP_Y }
+    ),
   ]
   return { outer }
 }
